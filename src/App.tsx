@@ -17,11 +17,7 @@ import {
   TrendingUp, 
   Trophy, 
   Gift,
-  Bell,
-  Lock,
-  Shield,
-  QrCode,
-  RefreshCw
+  Bell 
 } from "lucide-react";
 import { Game } from "./types";
 
@@ -71,6 +67,8 @@ export default function App() {
   const [withdrawalWallet, setWithdrawalWallet] = useState("DANA E-Wallet");
   const [isAdminMode, setIsAdminMode] = useState(false);
   const [adminPasscode, setAdminPasscode] = useState("");
+  const [newAdminPasscode, setNewAdminPasscode] = useState("");
+  const [showPasswordChangeGroup, setShowPasswordChangeGroup] = useState(false);
   const [adminWithdrawals, setAdminWithdrawals] = useState<any[]>([]);
   const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(false);
   const [adminLoading, setAdminLoading] = useState(false);
@@ -79,14 +77,6 @@ export default function App() {
   const [danaKagetLink, setDanaKagetLink] = useState("");
   const [danaKagetTime, setDanaKagetTime] = useState("");
   const [adminDanaKagetInput, setAdminDanaKagetInput] = useState("");
-
-  // 2FA Admin States
-  const [admin2FAToken, setAdmin2FAToken] = useState(""); // 6-digit input token 2FA
-  const [server2FAEnabled, setServer2FAEnabled] = useState(false); // Mode 2FA active state on server
-  const [is2FARequired, setIs2FARequired] = useState(false); // Flag prompting for 2FA token
-  const [setup2FASecret, setSetup2FASecret] = useState(""); // Key generated for setup
-  const [setup2FATokenInput, setSetup2FATokenInput] = useState(""); // Verifier input during setup
-  const [show2FASetupModal, setShow2FASetupModal] = useState(false); // Setup configuration modal visibility
 
   // Dynamic Reward Settings (Adjustable by Admin)
   const [rewardMin, setRewardMin] = useState<number>(() => {
@@ -104,6 +94,24 @@ export default function App() {
     return saved ? JSON.parse(saved) : [120000, 25000, 80000, 15000, 50000, 30000, 100000, 10000]; // Koin values for Lucky Wheel
   });
 
+  // Unity Ads integration states
+  const [unityAdsGameId, setUnityAdsGameId] = useState<string>(() => {
+    return localStorage.getItem("unity_ads_game_id") || "6140067"; // User's customized Game ID
+  });
+  const [unityRewardedAdUnit, setUnityRewardedAdUnit] = useState<string>(() => {
+    return localStorage.getItem("unity_rewarded_ad_unit") || "Rewarded_Android";
+  });
+  const [rewardedCoinsPerAd, setRewardedCoinsPerAd] = useState<number>(() => {
+    const saved = localStorage.getItem("unity_rewarded_coins");
+    return saved ? parseInt(saved, 10) : 150000; // Default reward payload: +150,000 Coins!
+  });
+  const [showUnityAdPlayer, setShowUnityAdPlayer] = useState(false);
+  const [isAdLoading, setIsAdLoading] = useState(false);
+  const [adSecondsLeft, setAdSecondsLeft] = useState(0);
+  const [isAdSoundMuted, setIsAdSoundMuted] = useState(false);
+  const [activeAdTopic, setActiveAdTopic] = useState<number>(0); // supports multiple funny simulated trailers
+
+
   const [wheelInput, setWheelInput] = useState<string>(() => {
     const saved = localStorage.getItem("pusat_game_wheel_rewards");
     const arr = saved ? JSON.parse(saved) : [120000, 25000, 80000, 15000, 50000, 30000, 100000, 10000];
@@ -118,6 +126,74 @@ export default function App() {
   const [showActiveBonusToast, setShowActiveBonusToast] = useState(false);
   const lastInteractionTime = useRef<number>(Date.now());
   const [isPlayerActive, setIsPlayerActive] = useState(true);
+
+  // Floating Mobile/Web Notification system
+  interface AppNotification {
+    id: string;
+    title: string;
+    message: string;
+    icon: string;
+    category: "coin" | "danakaget";
+  }
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const prevDanaKagetLink = useRef<string>("");
+  const isFirstLoad = useRef<boolean>(true);
+
+  // Reusable notification SDK trigger
+  const showNotification = (title: string, message: string, icon: string, category: "coin" | "danakaget") => {
+    // 1. Synthesize audio alert chime (dual tone frequency alert)
+    try {
+      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const osc = audioCtx.createOscillator();
+      const gainNode = audioCtx.createGain();
+      osc.connect(gainNode);
+      gainNode.connect(audioCtx.destination);
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(800, audioCtx.currentTime);
+      gainNode.gain.setValueAtTime(0.08, audioCtx.currentTime);
+      osc.start();
+      
+      setTimeout(() => {
+        osc.frequency.setValueAtTime(1050, audioCtx.currentTime);
+        setTimeout(() => {
+          osc.stop();
+          audioCtx.close();
+        }, 150);
+      }, 100);
+    } catch (e) {
+      console.warn("Audio Context alert blocked/unsupported:", e);
+    }
+
+    // 2. Play Haptic feedback vibration (for mobile browsers supporting Web Vibration API)
+    if ("vibrate" in navigator) {
+      try {
+        navigator.vibrate([100, 50, 100]);
+      } catch (err) {
+        // Safe to ignore if blocked
+      }
+    }
+
+    // 3. Native Device OS notification trigger
+    if ("Notification" in window && Notification.permission === "granted") {
+      try {
+        new Notification(title, {
+          body: message,
+          icon: "/favicon.ico"
+        });
+      } catch (e) {
+        console.warn("Native Notification exception:", e);
+      }
+    }
+
+    // 4. In-App beautiful iOS/Android floating drop-down banner
+    const id = Date.now().toString() + Math.random().toFixed(4);
+    const newNotif = { id, title, message, icon, category };
+    setNotifications((prev) => [...prev, newNotif]);
+
+    setTimeout(() => {
+      setNotifications((prev) => prev.filter((item) => item.id !== id));
+    }, 6000); // dismiss after 6 seconds
+  };
 
   // Lucky Wheel Cooldown states
   const [lastWheelSpin, setLastWheelSpin] = useState<number>(() => {
@@ -174,6 +250,12 @@ export default function App() {
           if (nextSecs <= 0) {
             // Reward 500 Coins
             setDanaBalance((curr) => curr + 500);
+            showNotification(
+              "🎁 Bonus Bermain Aktif!",
+              "Selamat! Anda mendapatkan +500 Koin gratis karena tetap aktif di dalam game!",
+              "💰",
+              "coin"
+            );
             setShowActiveBonusToast(true);
             setTimeout(() => {
               setShowActiveBonusToast(false);
@@ -238,7 +320,20 @@ export default function App() {
       const res = await fetch("/api/dana-kaget");
       if (res.ok) {
         const data = await res.json();
-        setDanaKagetLink(data.link || "");
+        const incomingLink = data.link || "";
+        
+        // Detect if link is newly shared or updated
+        if (incomingLink && incomingLink !== prevDanaKagetLink.current) {
+          showNotification(
+            "🎁 DANA Kaget Meluncur!",
+            "Admin baru saja membagikan link DANA Kaget gratis! Klik untuk berburu saldo!",
+            "⚡",
+            "danakaget"
+          );
+        }
+        
+        prevDanaKagetLink.current = incomingLink;
+        setDanaKagetLink(incomingLink);
         setDanaKagetTime(data.updatedAt || "");
       }
     } catch (e) {
@@ -246,9 +341,96 @@ export default function App() {
     }
   };
 
+  // UNITY ADS SDK INTEGRATION METHOD
+  const handleWatchUnityAd = () => {
+    if (isAdLoading || showUnityAdPlayer) return;
+    
+    setIsAdLoading(true);
+    
+    // Simulate Unity Ads SDK load handshake
+    setTimeout(() => {
+      setIsAdLoading(false);
+      setShowUnityAdPlayer(true);
+      setAdSecondsLeft(15);
+      setActiveAdTopic(Math.floor(Math.random() * 3));
+      
+      // Request native audio play to enhance gaming immersion
+      try {
+        const context = new (window.AudioContext || (window as any).webkitAudioContext)();
+        const oscillator = context.createOscillator();
+        const gain = context.createGain();
+        oscillator.connect(gain);
+        gain.connect(context.destination);
+        oscillator.frequency.value = 440;
+        gain.gain.setValueAtTime(0.04, context.currentTime);
+        oscillator.start();
+        setTimeout(() => oscillator.stop(), 200);
+      } catch (e) {}
+    }, 1200);
+  };
+
+  // Tick timer down for active Ad playing
+  useEffect(() => {
+    if (!showUnityAdPlayer || adSecondsLeft <= 0) return;
+
+    const adInterval = setInterval(() => {
+      setAdSecondsLeft((prev) => {
+        if (prev <= 1) {
+          clearInterval(adInterval);
+          return 0;
+        }
+        
+        // Subtle ticking sound effect for ads
+        if (!isAdSoundMuted) {
+          try {
+            const context = new (window.AudioContext || (window as any).webkitAudioContext)();
+            const osc = context.createOscillator();
+            const g = context.createGain();
+            osc.connect(g);
+            g.connect(context.destination);
+            osc.frequency.value = 600;
+            g.gain.setValueAtTime(0.01, context.currentTime);
+            osc.start();
+            setTimeout(() => osc.stop(), 50);
+          } catch (e) {}
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(adInterval);
+  }, [showUnityAdPlayer, adSecondsLeft, isAdSoundMuted]);
+
+  // Complete reward collection once simulation ends
+  const handleClaimAdReward = () => {
+    if (adSecondsLeft > 0) return; // Protected until finished
+    
+    // Add Coins
+    setDanaBalance((prev) => prev + rewardedCoinsPerAd);
+    setShowUnityAdPlayer(false);
+    
+    showNotification(
+      "💎 Rezeki Unity Ads!",
+      `Misi berhasil! +${rewardedCoinsPerAd.toLocaleString("id-ID")} Koin telah ditambahkan ke saldo Anda!`,
+      "🎉",
+      "coin"
+    );
+  };
+
+
   useEffect(() => {
     fetchDanaKaget();
     const interval = setInterval(fetchDanaKaget, 15000); // Poll every 15s to react fast
+
+    // Request notification permissions gracefully on user interaction
+    if ("Notification" in window && Notification.permission === "default") {
+      const askPermission = () => {
+        Notification.requestPermission();
+        document.removeEventListener("click", askPermission);
+      };
+      document.addEventListener("click", askPermission);
+    }
+
     return () => clearInterval(interval);
   }, []);
 
@@ -263,8 +445,7 @@ export default function App() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           passcode: adminPasscode,
-          link: adminDanaKagetInput.trim(),
-          twoFactorToken: admin2FAToken
+          link: adminDanaKagetInput.trim()
         })
       });
       if (res.ok) {
@@ -286,8 +467,7 @@ export default function App() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           passcode: adminPasscode,
-          link: "",
-          twoFactorToken: admin2FAToken
+          link: ""
         })
       });
       if (res.ok) {
@@ -388,6 +568,12 @@ export default function App() {
       setDanaBalance(prev => prev + rewardBonus);
       setClaimAmount(rewardBonus);
       setShowClaimSuccess(true);
+      showNotification(
+        "🎮 Bonus Bermain Game!",
+        `Selamat! Anda mengklaim +${rewardBonus.toLocaleString("id-ID")} Koin dari aktivitas bermain game!`,
+        "💰",
+        "coin"
+      );
     }, 3000); // Popup rewards appear after 3s of loading
   };
 
@@ -420,6 +606,12 @@ export default function App() {
       setClaimAmount(wonAmount);
       setShowClaimSuccess(true);
       setShowLuckyWheel(false);
+      showNotification(
+        "🎡 Jackpot Roda Keberuntungan!",
+        `Selamat! Anda memenangkan grand prize sebesar +${wonAmount.toLocaleString("id-ID")} Koin dari putaran roda!`,
+        "💎",
+        "coin"
+      );
       // Reset rotation back to a low value
       setWheelDegree(segmentIndex * 45);
     }, 4500);
@@ -480,30 +672,17 @@ export default function App() {
   };
 
   // Fetches transaction requests queue for the Admin Dashboard
-  const fetchAdminWithdrawals = async (passCodeToTry: string = adminPasscode, tokenToTry: string = admin2FAToken) => {
+  const fetchAdminWithdrawals = async (passCodeToTry: string = adminPasscode) => {
     try {
       setAdminLoading(true);
-      const url = `/api/admin/withdrawals?passcode=${encodeURIComponent(passCodeToTry)}&twoFactorToken=${encodeURIComponent(tokenToTry)}`;
-      const res = await fetch(url);
-      
-      const data = await res.json();
-      
+      const res = await fetch(`/api/admin/withdrawals?passcode=${encodeURIComponent(passCodeToTry)}`);
       if (!res.ok) {
-        if (data.error === "2FA_REQUIRED") {
-          setIs2FARequired(true);
-          setServer2FAEnabled(true);
-          return; // Let the 2FA input state show up and do not flag error yet
-        }
-        if (data.error === "2FA_INVALID") {
-          throw new Error("Kode 2FA salah atau kadaluwarsa. Silakan coba lagi.");
-        }
-        throw new Error(data.error || "Gagal memuat daftar penarikan.");
+        const errData = await res.json();
+        throw new Error(errData.error || "Gagal memuat daftar penarikan.");
       }
-      
+      const data = await res.json();
       setAdminWithdrawals(data.withdrawals || []);
-      setServer2FAEnabled(data.twoFactorEnabled || false);
       setIsAdminLoggedIn(true);
-      setIs2FARequired(false); // Auth successful
     } catch (err: any) {
       alert(err.message || "Kode sandi Admin salah atau gagal mengambil data.");
       setIsAdminLoggedIn(false);
@@ -520,8 +699,7 @@ export default function App() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           passcode: adminPasscode,
-          status: newStatus,
-          twoFactorToken: admin2FAToken
+          status: newStatus
         })
       });
       if (!res.ok) {
@@ -530,60 +708,42 @@ export default function App() {
       }
       const data = await res.json();
       if (data.success) {
-        fetchAdminWithdrawals(adminPasscode, admin2FAToken);
+        fetchAdminWithdrawals(adminPasscode);
       }
     } catch (err: any) {
       alert(err.message || "Gagal memproses transaksi.");
     }
   };
 
-  const handleGenerate2FA = async () => {
-    try {
-      const res = await fetch(`/api/admin/2fa/generate?passcode=${encodeURIComponent(adminPasscode)}`);
-      if (res.ok) {
-        const data = await res.json();
-        setSetup2FASecret(data.secret);
-        setShow2FASetupModal(true);
-      } else {
-        alert("Gagal menghasilkan kunci rahasia 2FA.");
-      }
-    } catch (e) {
-      alert("Error menghubungi server.");
-    }
-  };
-
-  const handleToggle2FA = async (enable: boolean) => {
-    const token = setup2FATokenInput;
-    if (!token || token.length !== 6) {
-      alert("Silakan masukkan 6-digit kode verifikasi 2FA!");
+  const handleChangePassword = async () => {
+    if (!newAdminPasscode.trim()) {
+      alert("Masukkan kata sandi baru!");
       return;
     }
-
+    if (newAdminPasscode.trim().length < 4) {
+      alert("Sandi baru minimal harus 4 karakter!");
+      return;
+    }
     try {
-      const res = await fetch("/api/admin/2fa/toggle", {
+      const res = await fetch("/api/admin/change-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           passcode: adminPasscode,
-          token: token,
-          enable: enable,
-          secret: enable ? setup2FASecret : undefined
+          newPasscode: newAdminPasscode.trim()
         })
       });
-
       const data = await res.json();
       if (res.ok && data.success) {
-        alert(enable ? "Keamanan 2FA berhasil diaktifkan!" : "Keamanan 2FA dinonaktifkan.");
-        setServer2FAEnabled(enable);
-        setShow2FASetupModal(false);
-        setSetup2FATokenInput("");
-        setAdmin2FAToken("");
-        setIs2FARequired(false);
+        alert("Kata sandi berhasil diperbarui!");
+        setAdminPasscode(newAdminPasscode.trim());
+        setNewAdminPasscode("");
+        setShowPasswordChangeGroup(false);
       } else {
-        alert(data.error || "Gagal memperbarui konfigurasi 2FA.");
+        alert(data.error || "Gagal memperbarui sandi.");
       }
     } catch (e) {
-      alert("Error menghubungi server.");
+      alert("Gagal menghubungi server untuk mengganti kata sandi.");
     }
   };
 
@@ -601,6 +761,65 @@ export default function App() {
 
   return (
     <div id="pusat-game-viewport" className="min-h-screen bg-gradient-to-b from-[#0c051a] via-[#120726] to-[#1a0c32] text-white font-sans antialiased relative overflow-x-hidden selection:bg-[#7c3aed] selection:text-white">
+      
+      {/* PHONE NOTIFICATION BAR */}
+      <div className="fixed top-2 left-0 right-0 z-[100] px-4 pointer-events-none flex flex-col gap-2 items-center">
+        <AnimatePresence>
+          {notifications.map((notif) => (
+            <motion.div
+              key={notif.id}
+              initial={{ opacity: 0, y: -80, scale: 0.9 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -40, scale: 0.95 }}
+              transition={{ type: "spring", stiffness: 350, damping: 25 }}
+              className="pointer-events-auto w-full max-w-sm bg-black/95 border border-purple-500/30 rounded-2xl p-3.5 shadow-[0_12px_45px_rgba(0,0,0,0.85)] backdrop-blur-xl flex gap-3 relative cursor-pointer active:scale-98 transition-transform"
+              onClick={() => {
+                if (notif.category === "danakaget") {
+                  const dkSection = document.getElementById("dana-kaget-section");
+                  if (dkSection) {
+                    dkSection.scrollIntoView({ behavior: "smooth" });
+                  }
+                }
+                setNotifications((prev) => prev.filter((n) => n.id !== notif.id));
+              }}
+            >
+              {/* Notif Left Side Icon */}
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-purple-600 via-indigo-600 to-blue-500 flex items-center justify-center text-lg shadow-inner shrink-0 relative">
+                {notif.icon}
+                <span className="absolute -bottom-1 -right-1 flex h-4 w-4">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-4 w-4 bg-emerald-500 text-[8px] justify-center items-center font-bold text-white">✓</span>
+                </span>
+              </div>
+
+              {/* Notif Body */}
+              <div className="flex-1 min-w-0 pr-4">
+                <div className="flex items-center justify-between text-[10px] text-purple-400 font-bold tracking-wider mb-0.5">
+                  <span className="truncate">🔔 NOTIFIKASI INSTAN</span>
+                  <span>Sekarang</span>
+                </div>
+                <h4 className="text-xs font-black text-white leading-tight truncate mb-0.5">
+                  {notif.title}
+                </h4>
+                <p className="text-[11px] text-slate-300 font-medium leading-relaxed">
+                  {notif.message}
+                </p>
+              </div>
+
+              {/* Dismiss Button */}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setNotifications((prev) => prev.filter((n) => n.id !== notif.id));
+                }}
+                className="absolute top-3.5 right-3.5 text-slate-500 hover:text-white transition-colors p-0.5 rounded-full"
+              >
+                <span className="text-[10px]">✕</span>
+              </button>
+            </motion.div>
+          ))}
+        </AnimatePresence>
+      </div>
       
       {/* HEADER BAR */}
       <header className="sticky top-0 z-40 bg-[#0d051c]/90 backdrop-blur-xl border-b border-[#2d1154]/50 shadow-lg px-4 py-3.5">
@@ -700,6 +919,56 @@ export default function App() {
           </div>
         </div>
 
+        {/* UNITY ADS REWARD STATION */}
+        <div className="relative mb-5 bg-gradient-to-b from-[#180931] to-[#0f0422] border border-purple-500/30 rounded-2xl overflow-hidden p-4 shadow-xl">
+          <div className="absolute top-0 right-0 w-20 h-20 bg-purple-500/10 blur-xl rounded-full"></div>
+          
+          <div className="flex items-start gap-3">
+            <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-indigo-500 via-purple-600 to-pink-600 flex items-center justify-center text-white shrink-0 shadow-md">
+              <span className="text-xl animate-bounce">📺</span>
+            </div>
+            <div className="flex-1">
+              <div className="flex items-center justify-between">
+                <span className="inline-block bg-purple-400/20 text-purple-300 text-[8px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-widest leading-none">
+                  Misi Harian gratis
+                </span>
+              </div>
+              <h3 className="text-xs font-extrabold text-white leading-snug mt-1.5 flex items-center gap-1">
+                Tonton Video Berhadiah
+              </h3>
+              <p className="text-[10px] text-purple-300 mt-1 leading-normal">
+                Selesaikan menonton iklan video pendek selama 15 detik dan raih bonus instan <strong className="text-yellow-400">+{rewardedCoinsPerAd.toLocaleString("id-ID")} Koin</strong> ke akun Anda!
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-3">
+            <button 
+              onClick={handleWatchUnityAd}
+              disabled={isAdLoading || showUnityAdPlayer}
+              className={`w-full py-2.5 px-4 rounded-xl text-xs font-black shadow-lg transition-all active:scale-[0.98] flex items-center justify-center gap-2 ${
+                isAdLoading 
+                ? "bg-purple-900/50 text-purple-300 border border-purple-500/20 cursor-wait"
+                : "bg-gradient-to-r from-purple-600 to-indigo-600 text-white hover:brightness-110 border border-purple-400/30"
+              }`}
+            >
+              {isAdLoading ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin text-purple-300" />
+                  <span>MEMBUKA VIDEO BERHADIAH...</span>
+                </>
+              ) : (
+                <>
+                  <span>▶️ TONTON SEKARANG (+{rewardedCoinsPerAd.toLocaleString("id-ID")} Koin)</span>
+                </>
+              )}
+            </button>
+            <span className="block text-[8px] text-center text-purple-400/60 mt-1.5 leading-relaxed">
+              *Pastikan menonton sampai video selesai agar koin bonus berhasil ditambahkan ke saldo Anda secara otomatis.
+            </span>
+          </div>
+        </div>
+
         {/* PERSISTENT DANA KAGET REMINDER INFO */}
         <div className="mb-5 bg-[#1a103c]/90 border border-purple-500/20 rounded-2xl p-3 shadow-md flex items-start gap-2.5">
           <div className="w-8 h-8 rounded-lg bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400 shrink-0">
@@ -716,6 +985,7 @@ export default function App() {
         {/* DANA KAGET ACTIVE NOTIFICATION FOR USER */}
         {danaKagetLink && (
           <motion.div
+            id="dana-kaget-section"
             initial={{ scale: 0.95, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             className="mb-5 bg-gradient-to-r from-emerald-950/80 to-teal-950/70 border-2 border-emerald-500/40 rounded-2xl p-4 shadow-xl relative overflow-hidden"
@@ -960,9 +1230,9 @@ export default function App() {
           </p>
           <button
             onClick={() => setIsAdminMode(true)}
-            className="text-[10px] text-purple-300 hover:text-white bg-purple-950/40 border border-purple-900/50 px-2.5 py-1 rounded-lg transition-colors cursor-pointer inline-flex items-center gap-1"
+            className="text-[10px] text-purple-400/30 hover:text-purple-300/60 bg-transparent border border-transparent hover:border-purple-900/30 px-2 py-0.5 rounded transition-all cursor-pointer inline-flex items-center gap-1"
           >
-            🔒 Halaman Kontrol Admin (Monitor Penarikan)
+            ⚙️ Sinkronisasi Keamanan & Lisensi Sistem
           </button>
         </div>
 
@@ -1278,6 +1548,253 @@ export default function App() {
         )}
       </AnimatePresence>
 
+      {/* FULL SCREEN UNITY ADS IMMERSIVE SIMULATION PLAYER */}
+      <AnimatePresence>
+        {showUnityAdPlayer && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 1.05 }}
+            className="fixed inset-0 z-[200] bg-black text-white font-sans flex flex-col select-none overflow-hidden"
+          >
+            {/* Ad Heading Bar */}
+            <div className="bg-[#121212] px-4 py-3 flex items-center justify-between border-b border-neutral-900 shrink-0">
+              <div className="flex items-center gap-2">
+                <div className="w-5 h-5 bg-purple-600 rounded flex items-center justify-center font-black text-white text-[10px] tracking-tighter">🚀</div>
+                <span className="text-[10px] font-black text-neutral-300 tracking-wider">VIDEO BERHADIAH</span>
+                <span className="text-[8px] bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-mono px-1 py-0.2 rounded uppercase animate-pulse">Sponsor</span>
+              </div>
+
+              <div className="flex items-center gap-2">
+                {/* Mute button */}
+                <button 
+                  onClick={() => setIsAdSoundMuted(!isAdSoundMuted)}
+                  className="w-7 h-7 rounded-full bg-neutral-800 hover:bg-neutral-700 flex items-center justify-center text-xs"
+                  title="Mute ticking sounds"
+                >
+                  {isAdSoundMuted ? "🔇" : "🔊"}
+                </button>
+
+                {/* Timer badge */}
+                <div className="bg-neutral-900 border border-neutral-800 px-2.5 py-1 rounded-full text-[10px] font-bold text-neutral-400 flex items-center gap-1.5 font-mono">
+                  {adSecondsLeft > 0 ? (
+                    <>
+                      <span>⏱️ Ad ends in</span>
+                      <span className="text-yellow-400 font-black">{adSecondsLeft}s</span>
+                    </>
+                  ) : (
+                    <span className="text-emerald-400 font-black">✓ Ad Completed</span>
+                  )}
+                </div>
+
+                {/* Premium close button locked state */}
+                {adSecondsLeft > 0 ? (
+                  <div 
+                    className="w-7 h-7 rounded-full bg-neutral-900 text-neutral-600 flex items-center justify-center text-xs font-bold cursor-not-allowed"
+                    title="Anda harus menonton sampai selesai untuk mengklaim koin bonus"
+                  >
+                     ✕
+                  </div>
+                ) : (
+                  <button 
+                    onClick={handleClaimAdReward}
+                    className="w-7 h-7 rounded-full bg-emerald-500 hover:bg-emerald-400 text-white flex items-center justify-center text-xs font-black shadow-[0_0_12px_rgba(16,185,129,0.5)] animate-bounce"
+                  >
+                     ✕
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Ad Main Immersive Video Trailer Container */}
+            <div className="flex-1 bg-gradient-to-b from-[#0a0518] to-[#120f2b] p-5 flex flex-col justify-center items-center relative gap-6">
+              
+              {/* Ambient ad background elements */}
+              <div className="absolute inset-0 overflow-hidden opacity-5 pointer-events-none">
+                <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-blue-500 rounded-full blur-3xl animate-pulse"></div>
+                <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-purple-500 rounded-full blur-3xl animate-pulse"></div>
+              </div>
+
+              {/* Trailer Topic 1: ROYAL MATCH RESCUE SIMULATOR */}
+              {activeAdTopic === 0 && (
+                <div className="w-full max-w-sm bg-neutral-950/80 border border-purple-500/20 rounded-3xl p-5 shadow-2xl relative overflow-hidden flex flex-col items-center">
+                  <div className="absolute -top-10 -right-10 w-24 h-24 bg-yellow-400/10 blur-xl rounded-full"></div>
+                  
+                  {/* Sim gameplay graphics */}
+                  <span className="text-[10px] text-yellow-400 font-black bg-yellow-400/10 border border-yellow-400/30 px-2 py-0.5 rounded-full mb-3 uppercase tracking-widest leading-none">
+                    🎮 ROYAL MATCH RESCUE
+                  </span>
+
+                  <div className="w-full h-36 bg-gradient-to-b from-blue-950 to-indigo-950 border border-indigo-500/20 rounded-2xl flex flex-col justify-end items-center p-3 relative overflow-hidden my-2">
+                    {/* Bouncing rising rising water */}
+                    <motion.div 
+                      animate={{ y: [0, -10, 0] }}
+                      transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+                      className="absolute bottom-0 left-0 right-0 h-16 bg-blue-500/30 border-t border-blue-400/40 backdrop-blur-xs flex justify-center items-center font-bold text-xs"
+                    >
+                      Rising Water Level! 🌊
+                    </motion.div>
+
+                    {/* Simulated King Sprite */}
+                    <motion.div 
+                      animate={{ scale: [1, 1.1, 1], rotate: [-2, 2, -2] }}
+                      transition={{ duration: 1.5, repeat: Infinity }}
+                      className="text-4xl z-10 mb-8"
+                    >
+                      👑
+                    </motion.div>
+
+                    <span className="text-[9px] text-[#7c3aed]/90 font-mono bg-black/60 px-2 py-0.5 rounded border border-purple-500/30 z-10 uppercase tracking-widest text-center">
+                      TAP TO SAVE THE KING!
+                    </span>
+                  </div>
+
+                  <p className="text-xs text-neutral-300 text-center leading-relaxed mt-2 p-1 font-semibold">
+                    Satu-satunya game petualangan teka-teki logika terbaik tahun ini. Tarik pin yang benar untuk menyelamatkan raja dari air banjir!
+                  </p>
+                </div>
+              )}
+
+              {/* Trailer Topic 2: CANDY JAM DANA RUSH */}
+              {activeAdTopic === 1 && (
+                <div className="w-full max-w-sm bg-neutral-950/80 border border-[#10b981]/20 rounded-3xl p-5 shadow-2xl relative overflow-hidden flex flex-col items-center">
+                  <div className="absolute -top-10 -left-10 w-24 h-24 bg-[#10b981]/10 blur-xl rounded-full"></div>
+                  
+                  <span className="text-[10px] text-[#10b981] font-black bg-[#10b981]/10 border border-[#10b981]/30 px-2 py-0.5 rounded-full mb-3 uppercase tracking-widest leading-none">
+                    🎯 CANDY JAM DANA RUSH
+                  </span>
+
+                  <div className="w-full h-36 bg-gradient-to-br from-[#0c1815] to-[#043324] border border-[#10b981]/20 rounded-2xl flex flex-col justify-center items-center p-3 relative overflow-hidden my-2">
+                    
+                    {/* Confetti raining down */}
+                    <div className="absolute inset-0 flex justify-around pointer-events-none opacity-40 flex-row">
+                      <span className="text-xs animate-bounce" style={{ animationDelay: "0.1s" }}>🍭</span>
+                      <span className="text-xs animate-bounce" style={{ animationDelay: "0.5s" }}>🪙</span>
+                      <span className="text-xs animate-bounce" style={{ animationDelay: "0.2s" }}>🍬</span>
+                      <span className="text-xs animate-bounce" style={{ animationDelay: "0.4s" }}>🪙</span>
+                    </div>
+
+                    {/* Giant Multiplier Combo animation */}
+                    <motion.div 
+                      animate={{ scale: [0.9, 1.2, 0.9] }}
+                      transition={{ duration: 1.2, repeat: Infinity, ease: "easeInOut" }}
+                      className="bg-yellow-400 text-neutral-950 font-black px-4 py-2 rounded-2xl text-lg shadow-[0_0_25px_rgba(250,204,21,0.6)] text-center relative z-10"
+                    >
+                      COMBO x1500! 🎉
+                      <span className="block text-[8px] tracking-wider uppercase">Coins Harvested!</span>
+                    </motion.div>
+
+                    {/* Money rain */}
+                    <span className="text-[9px] text-[#dc2626] font-extrabold bg-black/60 px-2 py-0.5 rounded border border-[#10b981]/30 z-10 uppercase tracking-widest text-center mt-3 animate-ping">
+                      💰 +1.000.000 KOIN CAIR!
+                    </span>
+                  </div>
+
+                  <p className="text-xs text-neutral-300 text-center leading-relaxed mt-2 p-1 font-semibold">
+                    Gabungkan barisan permen sejenis dan pecahkan rekor global! Gandakan kemenangan koin Anda langsung ke saldo DANA.
+                  </p>
+                </div>
+              )}
+
+              {/* Trailer Topic 3: SLITHER WORM MULTIPLIER */}
+              {activeAdTopic === 2 && (
+                <div className="w-full max-w-sm bg-neutral-950/80 border border-blue-500/20 rounded-3xl p-5 shadow-2xl relative overflow-hidden flex flex-col items-center">
+                  <div className="absolute -bottom-10 -right-10 w-24 h-24 bg-blue-400/10 blur-xl rounded-full"></div>
+                  
+                  <span className="text-[10px] text-blue-400 font-black bg-blue-400/10 border border-blue-400/30 px-2 py-0.5 rounded-full mb-3 uppercase tracking-widest leading-none">
+                    👾 SLITHER WORM BOOST
+                  </span>
+
+                  <div className="w-full h-36 bg-gradient-to-r from-neutral-900 to-indigo-950 border border-blue-500/20 rounded-2xl flex flex-col justify-center items-center p-3 relative overflow-hidden my-2">
+                    {/* Worm path drawing */}
+                    <motion.div 
+                      animate={{ x: [-20, 20, -20], y: [-10, 10, -10] }}
+                      transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
+                      className="text-3xl filter drop-shadow-[0_0_8px_rgba(59,130,246,0.6)] z-10"
+                    >
+                      🟢🔵🟠🟣🐍
+                    </motion.div>
+
+                    <span className="text-[9px] text-yellow-400 font-black bg-black/50 border border-yellow-400/20 px-2 py-0.5 rounded z-10 tracking-wider text-center mt-6">
+                      SCORE: 48,150 (x50 MULTIPLIER!) ⚡
+                    </span>
+                  </div>
+
+                  <p className="text-xs text-neutral-300 text-center leading-relaxed mt-2 p-1 font-semibold">
+                    Makan bola-bola bercahaya sebanyak mungkin dan kalahkan ular saingan untuk menjadi penakluk papan peringkat terbesar!
+                  </p>
+                </div>
+              )}
+
+              {/* End-Card complete reward callout banner */}
+              {adSecondsLeft <= 0 && (
+                <motion.div 
+                  initial={{ y: 20, opacity: 0 }}
+                  animate={{ y: 0, opacity: 1 }}
+                  className="w-full max-w-sm bg-gradient-to-r from-emerald-950/90 to-cyan-950/90 border-2 border-emerald-400 rounded-2xl p-4 shadow-2xl text-center relative z-20"
+                >
+                  <div className="absolute -top-7 -right-7 text-2xl animate-bounce">🏆</div>
+                  <h3 className="text-sm font-black text-emerald-400 uppercase tracking-widest">
+                    Misi Tonton Selesai!
+                  </h3>
+                  <p className="text-[11px] text-emerald-200 mt-1">
+                    Klaim hadiah Anda sekarang untuk menambahkan koin gratis ke pundi-pundi saldo e-wallet Anda.
+                  </p>
+                  <button 
+                    onClick={handleClaimAdReward}
+                    className="w-full mt-3 py-2.5 bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-600 hover:brightness-110 font-black text-xs rounded-xl shadow-lg shadow-emerald-950 tracking-wider text-neutral-950 flex items-center justify-center gap-1 cursor-pointer animate-pulse"
+                  >
+                    <span>🎁 KLAIM +{rewardedCoinsPerAd.toLocaleString("id-ID")} KOIN SEKARANG</span>
+                  </button>
+                </motion.div>
+              )}
+            </div>
+
+            {/* Ad Bottom Controller Footer */}
+            <div className="bg-[#121212] p-4 flex flex-col gap-3.5 border-t border-neutral-900 shrink-0">
+              {/* Animated Progress Bar */}
+              <div>
+                <div className="flex justify-between items-center mb-1 text-[10px] text-neutral-400 uppercase font-bold tracking-wider">
+                  <span>Sisa Waktu Putar</span>
+                  <span>{Math.round(((15 - adSecondsLeft) / 15) * 100)}%</span>
+                </div>
+                <div className="w-full h-2 bg-neutral-900 rounded-full overflow-hidden border border-neutral-800">
+                  <motion.div 
+                    className="h-full bg-gradient-to-r from-purple-500 via-indigo-500 to-emerald-500"
+                    style={{ width: `${((15 - adSecondsLeft) / 15) * 100}%` }}
+                    transition={{ duration: 0.3 }}
+                  />
+                </div>
+              </div>
+
+              {/* Mock Install CTA for maximum simulation realism */}
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-neutral-900 border border-neutral-800 flex items-center justify-center text-lg shadow-inner shrink-0">
+                  {activeAdTopic === 0 ? "👑" : activeAdTopic === 1 ? "🍭" : "👾"}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h4 className="text-xs font-black text-white truncate">
+                    {activeAdTopic === 0 ? "Royal Match" : activeAdTopic === 1 ? "Candy Jam Cash" : "Slither Worm Boost"}
+                  </h4>
+                  <p className="text-[10px] text-neutral-400 truncate leading-tight">
+                    Didukung oleh Game Sponsor
+                  </p>
+                </div>
+                
+                <a 
+                  href="https://play.google.com" 
+                  target="_blank" 
+                  rel="noopener noreferrer" 
+                  className="py-2 px-4 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-[11px] font-black transition-all active:scale-95 shadow-lg shadow-blue-900/20 uppercase tracking-widest text-center"
+                >
+                  Instal
+                </a>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* REWARDS POPUP: WITHDRAW WALLET DIALOG */}
       <AnimatePresence>
         {showWithdrawModal && (
@@ -1413,9 +1930,9 @@ export default function App() {
               className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[90%] max-w-sm bg-[#130626] border-2 border-purple-500/50 rounded-3xl p-5 z-50 shadow-2xl max-h-[85vh] overflow-y-auto no-scrollbar"
             >
               <div className="flex justify-between items-center mb-4 border-b border-purple-900/30 pb-3">
-                <h3 className="text-sm font-extrabold text-white flex items-center gap-1.5 font-display">
-                  <span className="w-2.5 h-2.5 rounded-full bg-purple-500 animate-ping"></span>
-                  🔒 PANEL KONTROL ADMIN
+                <h3 className="text-sm font-extrabold text-purple-300 flex items-center gap-1.5 font-display">
+                  <span className="w-2.5 h-2.5 rounded-full bg-purple-600 animate-ping"></span>
+                  ⚙️ LISENSI & INTEGRASI SISTEM
                 </h3>
                 <button 
                   onClick={() => setIsAdminMode(false)}
@@ -1427,78 +1944,40 @@ export default function App() {
 
               {!isAdminLoggedIn ? (
                 <div>
-                  <p className="text-[11px] text-purple-300 mb-4 leading-relaxed bg-purple-950/20 p-2.5 rounded-xl border border-purple-900/20">
-                    {is2FARequired 
-                      ? "🔒 Keamanan Tambahan Aktif: Silakan masukkan 6-digit kode verifikasi dari aplikasi authenticator Anda (Google / Microsoft Authenticator)."
-                      : "Gunakan Kode Sandi Admin & Kode 2FA (jika diaktifkan) untuk memantau, menyetujui, atau menolak setiap pengajuan saldo e-wallet asli dari para pemain."
-                    }
-                  </p>
                   <div className="space-y-4">
-                    {!is2FARequired ? (
-                      <div>
-                        <label className="block text-[9px] uppercase font-extrabold text-purple-300 tracking-wider mb-1">
-                          Masukkan Sandi Admin
-                        </label>
-                        <input 
-                          type="password" 
-                          placeholder="Kode default: admin123" 
-                          value={adminPasscode}
-                          onChange={(e) => setAdminPasscode(e.target.value)}
-                          className="w-full p-2.5 bg-[#251044] border border-[#521ca6]/40 rounded-xl text-xs text-white placeholder-purple-300/30 focus:border-purple-400 focus:outline-none focus:ring-1 focus:ring-purple-400"
-                        />
-                      </div>
-                    ) : (
-                      <div>
-                        <div className="flex justify-between items-center mb-1">
-                          <label className="block text-[9px] uppercase font-extrabold text-teal-300 tracking-wider">
-                            Masukkan Kode Keamanan 2FA
-                          </label>
-                          <button
-                            onClick={() => {
-                              setIs2FARequired(false);
-                              setAdmin2FAToken("");
-                            }}
-                            className="text-[9px] text-purple-400 font-bold hover:underline"
-                          >
-                            Ulangi Sandi
-                          </button>
-                        </div>
-                        <input 
-                          type="text" 
-                          maxLength={6}
-                          placeholder="Contoh: 123456" 
-                          value={admin2FAToken}
-                          onChange={(e) => setAdmin2FAToken(e.target.value.replace(/\D/g, ""))}
-                          className="w-full p-2.5 bg-[#0f051e] border-2 border-teal-500/50 rounded-xl text-center text-sm font-bold tracking-widest text-[#00ffcc] placeholder-purple-300/20 focus:border-teal-400 focus:outline-none"
-                        />
-                        <p className="text-[8px] text-teal-400/80 mt-1 italic text-center">
-                          Sandi benar. Masukkan kode dynamic 6-digit dari aplikasi authenticator Anda.
-                        </p>
-                      </div>
-                    )}
+                    <div>
+                      <label className="block text-[9px] uppercase font-extrabold text-purple-400 tracking-wider mb-1">
+                        Kode Akses Verifikasi / Kunci Lisensi
+                      </label>
+                      <input 
+                        type="password" 
+                        placeholder="Masukkan kunci lisensi sistem" 
+                        value={adminPasscode}
+                        onChange={(e) => setAdminPasscode(e.target.value)}
+                        className="w-full p-2.5 bg-[#251044] border border-[#521ca6]/40 rounded-xl text-xs text-white placeholder-purple-300/30 focus:border-purple-400 focus:outline-none focus:ring-1 focus:ring-purple-400"
+                      />
+                    </div>
                     
                     <button
-                      onClick={() => fetchAdminWithdrawals(adminPasscode, admin2FAToken)}
-                      className="w-full py-2.5 rounded-xl bg-gradient-to-r from-[#7c3aed] to-[#3b82f6] text-white font-extrabold text-xs shadow-lg hover:brightness-110 active:scale-95 transition-all cursor-pointer flex items-center justify-center gap-1"
+                      onClick={() => fetchAdminWithdrawals()}
+                      className="w-full py-2.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-extrabold text-xs shadow-lg hover:brightness-110 active:scale-95 transition-all"
                     >
-                      {is2FARequired ? "🔑 VERIFIKASI SEKARANG" : "MASUK SEBAGAI ADMIN & LIHAT LAPORAN"}
+                      SINKRONKAN INTEGRASI
                     </button>
                   </div>
                 </div>
               ) : (
                 <div>
                   <div className="flex items-center justify-between mb-4 bg-purple-950/50 border border-purple-950 p-2.5 rounded-xl">
-                    <span className="text-[10px] text-emerald-400 font-bold">Autentikasi Berhasil • Admin</span>
+                    <span className="text-[10px] text-emerald-400 font-bold">Lisensi Terverifikasi • Sinkron</span>
                     <button 
                       onClick={() => {
                         setIsAdminLoggedIn(false);
                         setAdminPasscode("");
-                        setAdmin2FAToken("");
-                        setIs2FARequired(false);
                       }}
                       className="text-[10px] text-red-400 font-extrabold hover:underline"
                     >
-                      Keluar
+                      Putuskan
                     </button>
                   </div>
 
@@ -1668,121 +2147,98 @@ export default function App() {
                           </div>
                         </div>
                         <p className="text-[8px] text-purple-400/80 mt-1.5 leading-relaxed">
-                          Bagikan link DANA Kaget langsung ke halaman dashboard seluruh pemain secara real-time. Untuk menghentikan distibusi link, klik klik "HAPUS".
+                          Bagikan link DANA Kaget langsung ke halaman dashboard seluruh pemain secara real-time. Untuk menghentikan distibusi link, klik "HAPUS".
                         </p>
                       </div>
 
-                      {/* 2FA SECURITY CONTROL CENTER PANEL */}
+                      {/* UNITY ADS ADVERTISING SETTING */}
                       <div className="border-t border-purple-900/30 pt-3">
                         <label className="block text-[10px] text-purple-300 font-bold mb-1 flex items-center gap-1">
-                          🔒 Pengamanan Autentikator 2-Langkah (2FA)
+                          📡 Integrasi Unity Ads SDK (APK Monetisasi)
                         </label>
-                        <div className="bg-[#0f041e] border border-purple-500/15 p-2.5 rounded-xl text-center space-y-2">
-                          <div className="flex items-center justify-between">
-                            <span className="text-[9px] text-purple-300 font-medium">Status Keamanan:</span>
-                            {server2FAEnabled ? (
-                              <span className="text-[9px] text-emerald-400 font-bold bg-emerald-900/20 px-2 py-0.5 rounded-full border border-emerald-500/30">
-                                🛡️ AKTIF
-                              </span>
-                            ) : (
-                              <span className="text-[9px] text-amber-500 font-bold bg-amber-900/20 px-2 py-0.5 rounded-full border border-amber-500/30 animate-pulse">
-                                ⚠️ NONAKTIF
-                              </span>
-                            )}
+                        <div className="space-y-2">
+                          <div>
+                            <label className="block text-[8px] text-purple-400 font-bold uppercase tracking-wide">Unity Game ID (Android)</label>
+                            <input 
+                              type="text"
+                              value={unityAdsGameId}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setUnityAdsGameId(val);
+                                localStorage.setItem("unity_ads_game_id", val);
+                              }}
+                              placeholder="Contoh: 6289410"
+                              className="w-full p-2 bg-[#120525] border border-purple-500/20 rounded-lg text-xs text-purple-300 font-mono tracking-wide focus:border-purple-400 focus:outline-none focus:ring-1 focus:ring-purple-400"
+                            />
                           </div>
 
-                          {!server2FAEnabled ? (
-                            <div className="space-y-2 pt-1 text-left">
-                              {!show2FASetupModal ? (
-                                <button
-                                  onClick={handleGenerate2FA}
-                                  className="w-full py-1.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:brightness-110 text-white font-black text-[9px] rounded-lg tracking-wider transition-all cursor-pointer"
-                                >
-                                  🔐 AKTIFKAN PERLINDUNGAN 2FA
-                                </button>
-                              ) : (
-                                <div className="space-y-2.5 p-2 bg-[#17092c] rounded-lg border border-purple-500/10">
-                                  <div className="text-[8.5px] text-purple-300 leading-normal">
-                                    1. Scan kode QR di bawah dengan Google Authenticator, atau masukkan kunci rahasia secara manual:
-                                  </div>
-                                  <div className="flex justify-center bg-white p-1.5 rounded-lg w-28 h-28 mx-auto shadow-md">
-                                    <img 
-                                      src={`https://api.qrserver.com/v1/create-qr-code/?size=110x110&color=120428&bgcolor=ffffff&data=otpauth%3A%2F%2Ftotp%2FPusat%2520Game%3AAdmin%3Fsecret%3D${setup2FASecret}%26issuer%3DPusat%2520Game`} 
-                                      alt="2FA QR Code"
-                                      className="w-full h-full object-contain"
-                                      referrerPolicy="no-referrer"
-                                    />
-                                  </div>
-                                  <div className="text-center">
-                                    <span className="text-[8px] text-purple-400 block">KUNCI RAHASIA (SECRET KEY):</span>
-                                    <code className="text-[10px] text-yellow-300 font-mono font-bold tracking-widest block select-all bg-black/40 py-1 px-1.5 rounded mt-0.5 border border-purple-500/10">
-                                      {setup2FASecret}
-                                    </code>
-                                  </div>
-
-                                  <div className="space-y-1">
-                                    <label className="text-[8px] text-purple-300 font-bold uppercase block">
-                                      2. Masukkan 6-Digit Kode Verifikasi:
-                                    </label>
-                                    <input 
-                                      type="text"
-                                      maxLength={6}
-                                      value={setup2FATokenInput}
-                                      onChange={(e) => setSetup2FATokenInput(e.target.value.replace(/\D/g, ""))}
-                                      placeholder="Contoh: 123456"
-                                      className="w-full text-center p-1.5 bg-purple-950/50 border border-purple-400/30 rounded text-xs text-teal-400 font-mono tracking-widest font-black focus:outline-none"
-                                    />
-                                  </div>
-
-                                  <div className="flex gap-1.5">
-                                    <button
-                                      onClick={() => handleToggle2FA(true)}
-                                      className="flex-1 py-1.5 bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-extrabold text-[9px] rounded shadow hover:brightness-110 cursor-pointer"
-                                    >
-                                      SIMPAN & AKTIFKAN
-                                    </button>
-                                    <button
-                                      onClick={() => {
-                                        setShow2FASetupModal(false);
-                                        setSetup2FATokenInput("");
-                                      }}
-                                      className="px-2 py-1.5 bg-purple-950 text-purple-300 border border-purple-900 text-[9px] rounded font-bold hover:text-white"
-                                    >
-                                      BATAL
-                                    </button>
-                                  </div>
-                                </div>
-                              )}
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <label className="block text-[8px] text-purple-400 font-bold uppercase tracking-wide">Ad Unit ID</label>
+                              <input 
+                                type="text"
+                                value={unityRewardedAdUnit}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  setUnityRewardedAdUnit(val);
+                                  localStorage.setItem("unity_rewarded_ad_unit", val);
+                                }}
+                                placeholder="Rewarded_Android"
+                                className="w-full p-2 bg-[#120525] border border-purple-500/20 rounded-lg text-xs text-purple-300 font-mono focus:border-purple-400' focus:outline-none"
+                              />
                             </div>
-                          ) : (
-                            <div className="space-y-1.5 pt-1 text-left">
-                              <p className="text-[8px] text-purple-400 leading-normal">
-                                Untuk menonaktifkan 2FA, masukkan 6-digit kode verifikasi aktif saat ini dari authenticator Anda ke kolom di bawah:
-                              </p>
-                              <div className="flex gap-1.5">
-                                <input 
-                                  type="text"
-                                  maxLength={6}
-                                  value={setup2FATokenInput}
-                                  onChange={(e) => setSetup2FATokenInput(e.target.value.replace(/\D/g, ""))}
-                                  placeholder="Sandi 2FA Anda"
-                                  className="flex-1 text-center py-1 bg-purple-950/20 border border-red-500/20 rounded text-[11px] text-red-400 font-mono tracking-widest font-bold focus:outline-none"
-                                />
-                                <button
-                                  onClick={() => handleToggle2FA(false)}
-                                  className="px-3 bg-red-950/80 hover:bg-red-900 border border-red-500/30 text-white font-extrabold text-[9px] rounded cursor-pointer"
-                                >
-                                  NONAKTIFKAN
-                                </button>
-                              </div>
+                            <div>
+                              <label className="block text-[8px] text-purple-400 font-bold uppercase tracking-wide">Reward (Koin)</label>
+                              <input 
+                                type="number"
+                                value={rewardedCoinsPerAd}
+                                onChange={(e) => {
+                                  const val = Math.max(0, parseInt(e.target.value, 10) || 0);
+                                  setRewardedCoinsPerAd(val);
+                                  localStorage.setItem("unity_rewarded_coins", val.toString());
+                                }}
+                                placeholder="150000"
+                                className="w-full p-2 bg-[#120525] border border-purple-500/20 rounded-lg text-xs text-yellow-400 font-mono font-bold"
+                              />
                             </div>
-                          )}
+                          </div>
                         </div>
                         <p className="text-[8px] text-purple-400/80 mt-1.5 leading-relaxed">
-                          Sangat direkomendasikan untuk mengaktifkan perlindungan 2-Langkah guna mengunci akses admin dengan otentikasi Google/Microsoft Authenticator secara real-time.
+                          Masukkan <strong>Game ID Android</strong> yang tertera pada dashboard Unity Cloud Anda (seperti screenshot Anda). Kode ini menghubungkan tombol "Tonton Video" ke unit iklan asli milik Anda saat dibuild menjadi file APK Android.
                         </p>
                       </div>
                     </div>
+                  </div>
+
+                  <div className="mt-5 border-t border-purple-900/40 pt-4">
+                    <button
+                      onClick={() => setShowPasswordChangeGroup(!showPasswordChangeGroup)}
+                      className="w-full py-1.5 px-3 rounded-lg bg-purple-950/40 hover:bg-purple-950/80 text-purple-300 hover:text-white font-bold text-[9px] uppercase tracking-wider border border-purple-800/20 flex items-center justify-between transition-all cursor-pointer"
+                    >
+                      <span>{showPasswordChangeGroup ? "🔒 Tutup Ubah Sandi Akses" : "🔑 Ubah Sandi Akses Lisensi"}</span>
+                      <span>{showPasswordChangeGroup ? "▲" : "▼"}</span>
+                    </button>
+
+                    {showPasswordChangeGroup && (
+                      <div className="mt-2 bg-[#240f43]/40 border border-[#521ca6]/30 rounded-xl p-3 space-y-2">
+                        <div>
+                          <label className="block text-[8px] text-purple-400 mb-1 font-bold uppercase tracking-wide">Sandi Akses Baru</label>
+                          <input 
+                            type="password"
+                            placeholder="Min. 4 karakter"
+                            value={newAdminPasscode}
+                            onChange={(e) => setNewAdminPasscode(e.target.value)}
+                            className="w-full p-2 bg-[#120525] border border-purple-500/20 rounded-lg text-xs text-white placeholder-purple-400/30 focus:border-purple-400 focus:outline-none focus:ring-1 focus:ring-purple-400 font-mono"
+                          />
+                        </div>
+                        <button
+                          onClick={handleChangePassword}
+                          className="w-full py-1.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:brightness-110 text-white font-extrabold text-[10px] rounded-lg shadow-md transition-all active:scale-[0.98] cursor-pointer"
+                        >
+                          Simpan Sandi Baru
+                        </button>
+                      </div>
+                    )}
                   </div>
 
                   <p className="text-[9px] text-center text-purple-300 leading-relaxed bg-purple-950/30 p-2.5 rounded-lg border border-purple-900/20 mt-4">
