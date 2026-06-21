@@ -1,0 +1,6 @@
+{
+  "name": "Pusat Game",
+  "description": "Pusat Game dengan banyak pilihan game seru dan menarik. Mainkan game kuis, puzzle, aksi, olahraga, dan papan secara instan.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

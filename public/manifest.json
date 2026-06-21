@@ -1,0 +1,22 @@
+{
+  "name": "Pusat Game - Banyak Pilihan",
+  "short_name": "Pusat Game",
+  "description": "Pusat Game dengan banyak pilihan game seru dan menarik. Mainkan game kuis, puzzle, aksi, olahraga, dan papan secara instan.",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#0f071e",
+  "theme_color": "#7c3aed",
+  "icons": [
+    {
+      "src": "/icon-512.jpg",
+      "sizes": "192x192",
+      "type": "image/jpeg"
+    },
+    {
+      "src": "/icon-512.jpg",
+      "sizes": "512x512",
+      "type": "image/jpeg"
+    }
+  ]
+}
