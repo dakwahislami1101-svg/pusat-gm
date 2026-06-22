@@ -76,21 +76,21 @@ jobs:
           echo "Menonaktifkan kotlin-stdlib-jdk7 & jdk8 yang duplikat..."
           cat << 'EOF' >> android/build.gradle
 
-allprojects {
-    configurations.all {
-        exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib-jdk7'
-        exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib-jdk8'
-    }
-}
-EOF
+          allprojects {
+              configurations.all {
+                  exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib-jdk7'
+                  exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib-jdk8'
+              }
+          }
+          EOF
 
           cat << 'EOF' >> android/app/build.gradle
 
-configurations.all {
-    exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib-jdk7'
-    exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib-jdk8'
-}
-EOF
+          configurations.all {
+              exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib-jdk7'
+              exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib-jdk8'
+          }
+          EOF
 
       # 8. Konfigurasi Gradle & Izin Eksekusi di Android Project
       - name: Grant Execute Permission for Gradle
