@@ -160,14 +160,14 @@ jobs:
             --ks-pass pass:"$KS_PASS" \
             --key-pass pass:"$K_PASS" \
             --out android/app/build/outputs/apk/release/app-release-signed.apk \
-            android/app/build/outputs/apk/release/app-release-unsigned.apk
+            "$(find android/app/build/outputs/apk/release -name "*.apk" ! -name "*-signed.apk" | head -n 1)"
 
           echo "Menandatangani AAB dengan jarsigner..."
           jarsigner -keystore "$KS_FILE" \
             -storepass "$KS_PASS" \
             -keypass "$K_PASS" \
             -signedjar android/app/build/outputs/bundle/release/app-release-signed.aab \
-            android/app/build/outputs/bundle/release/app-release-unsigned.aab \
+            "$(find android/app/build/outputs/bundle/release -name "*.aab" ! -name "*-signed.aab" | head -n 1)" \
             "$KS_ALIAS"
           
           echo "Verifikasi APK berhasil ditandatangani..."
