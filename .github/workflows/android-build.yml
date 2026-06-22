@@ -28,11 +28,11 @@ jobs:
           node-version: '20'
 
       # 3. Setup Java JDK (Wajib untuk kompilasi Android)
-      - name: Setup Java JDK 17
+      - name: Setup Java JDK 21
         uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
-          java-version: '17'
+          java-version: '21'
 
       # 4. Setup Android SDK
       - name: Setup Android SDK
