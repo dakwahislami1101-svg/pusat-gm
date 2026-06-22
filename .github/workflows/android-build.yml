@@ -91,7 +91,69 @@ jobs:
           ./gradlew assembleRelease
           ./gradlew bundleRelease
 
-      # 11. Upload file Debug APK sebagai Artifact
+      # 11. Otomatisasi tanda tangan (Signing) APK dan AAB
+      - name: Sign Release APK & AAB
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          mkdir -p android-signing
+          
+          if [ ! -z "$KEYSTORE_BASE64" ]; then
+            echo "Menggunakan Keystore khusus dari GitHub Secrets..."
+            echo "$KEYSTORE_BASE64" | base64 --decode > android-signing/release.keystore
+            KS_FILE="android-signing/release.keystore"
+            KS_PASS="$KEYSTORE_PASSWORD"
+            KS_ALIAS="$KEY_ALIAS"
+            K_PASS="$KEY_PASSWORD"
+          else
+            echo "GitHub Secrets kosong. Membuat signature/keystore dinamis otomatis..."
+            KS_FILE="android-signing/auto-release.keystore"
+            KS_PASS="pusatgame123"
+            KS_ALIAS="pusatgame"
+            K_PASS="pusatgame123"
+            
+            keytool -genkey -v \
+              -keystore "$KS_FILE" \
+              -alias "$KS_ALIAS" \
+              -keyalg RSA \
+              -keysize 2048 \
+              -validity 10000 \
+              -storepass "$KS_PASS" \
+              -keypass "$K_PASS" \
+              -dname "CN=Pusat Game, OU=Dev, O=PusatGame, L=Jakarta, S=DKI, C=ID"
+          fi
+
+          echo "Menandatangani APK dengan apksigner..."
+          # Temukan alat apksigner yang paling update di Android SDK
+          APKSIGNER=$(find $ANDROID_SDK_ROOT/build-tools -name apksigner | sort | tail -n 1)
+          if [ -z "$APKSIGNER" ]; then
+            echo "apksigner tidak ditemukan, menggunakan command fallback..."
+            APKSIGNER="apksigner"
+          fi
+          
+          $APKSIGNER sign \
+            --ks "$KS_FILE" \
+            --ks-key-alias "$KS_ALIAS" \
+            --ks-pass pass:"$KS_PASS" \
+            --key-pass pass:"$K_PASS" \
+            --out android/app/build/outputs/apk/release/app-release-signed.apk \
+            android/app/build/outputs/apk/release/app-release-unsigned.apk
+
+          echo "Menandatangani AAB dengan jarsigner..."
+          jarsigner -keystore "$KS_FILE" \
+            -storepass "$KS_PASS" \
+            -keypass "$K_PASS" \
+            -signedjar android/app/build/outputs/bundle/release/app-release-signed.aab \
+            android/app/build/outputs/bundle/release/app-release-unsigned.aab \
+            "$KS_ALIAS"
+          
+          echo "Verifikasi APK berhasil ditandatangani..."
+          $APKSIGNER verify android/app/build/outputs/apk/release/app-release-signed.apk
+
+      # 12. Upload file Debug APK sebagai Artifact
       - name: Upload Debug APK
         uses: actions/upload-artifact@v4
         with:
@@ -99,18 +161,18 @@ jobs:
           path: android/app/build/outputs/apk/debug/app-debug.apk
           retention-days: 7
 
-      # 12. Upload file Release APK sebagai Artifact
-      - name: Upload Release APK
+      # 13. Upload file Signed Release APK sebagai Artifact
+      - name: Upload Signed Release APK
         uses: actions/upload-artifact@v4
         with:
           name: release-apk
-          path: android/app/build/outputs/apk/release/app-release-unsigned.apk
+          path: android/app/build/outputs/apk/release/app-release-signed.apk
           retention-days: 7
 
-      # 13. Upload file Release AAB (Android App Bundle untuk Google Play Store)
-      - name: Upload Release AAB
+      # 14. Upload file Signed Release AAB (Android App Bundle untuk Google Play Store)
+      - name: Upload Signed Release AAB
         uses: actions/upload-artifact@v4
         with:
           name: release-aab
-          path: android/app/build/outputs/bundle/release/app-release-unsigned.aab
+          path: android/app/build/outputs/bundle/release/app-release-signed.aab
           retention-days: 7
