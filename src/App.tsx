@@ -106,9 +106,14 @@ export default function App() {
   const getApiUrl = (path: string) => {
     // Is this running inside Capacitor (Android/iOS) or standalone local index.html?
     const isMobileClient = 
+      !!(window as any).Capacitor ||
       window.location.origin.includes("capacitor://") || 
-      (window.location.origin.includes("http://localhost") && !window.location.port) ||
-      window.location.protocol === "file:";
+      window.location.protocol === "file:" ||
+      (window.location.hostname === "localhost" && !["3000", "5173", "8080", "3001"].includes(window.location.port)) ||
+      (window.location.hostname === "127.0.0.1" && !["3000", "5173", "8080", "3001"].includes(window.location.port)) ||
+      // Any standard webview local content on Android
+      window.location.origin.startsWith("http://localhost") || 
+      window.location.origin.startsWith("https://localhost");
 
     if (isMobileClient) {
       return `${apiHost.replace(/\/$/, "")}${path}`;
