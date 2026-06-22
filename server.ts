@@ -9,6 +9,25 @@ async function startServer() {
   // Middleware to parse JSON bodies
   app.use(express.json());
 
+  // Middleware to allow CORS for Capacitor/Android client origins
+  app.use((req, res, next) => {
+    const origin = req.headers.origin;
+    if (origin) {
+      res.setHeader("Access-Control-Allow-Origin", origin);
+    } else {
+      res.setHeader("Access-Control-Allow-Origin", "*");
+    }
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS, PUT, PATCH, DELETE");
+    res.setHeader("Access-Control-Allow-Headers", "X-Requested-With,Content-Type,Authorization");
+    res.setHeader("Access-Control-Allow-Credentials", "true");
+    
+    // Quick handle for preflight OPTIONS requests
+    if (req.method === "OPTIONS") {
+      return res.sendStatus(200);
+    }
+    next();
+  });
+
   // Interface representing the GamePix JSON Feed item structure
   interface GameItem {
     id: string;

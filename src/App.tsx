@@ -98,6 +98,23 @@ export default function App() {
   const [unityAdsGameId, setUnityAdsGameId] = useState<string>(() => {
     return localStorage.getItem("unity_ads_game_id") || "6140067"; // User's customized Game ID
   });
+
+  const [apiHost, setApiHost] = useState<string>(() => {
+    return localStorage.getItem("pusat_game_api_host") || "https://ais-pre-5lqjbcyrtgpq3bexvnmoaj-141461824786.asia-east1.run.app";
+  });
+
+  const getApiUrl = (path: string) => {
+    // Is this running inside Capacitor (Android/iOS) or standalone local index.html?
+    const isMobileClient = 
+      window.location.origin.includes("capacitor://") || 
+      (window.location.origin.includes("http://localhost") && !window.location.port) ||
+      window.location.protocol === "file:";
+
+    if (isMobileClient) {
+      return `${apiHost.replace(/\/$/, "")}${path}`;
+    }
+    return path;
+  };
   const [unityRewardedAdUnit, setUnityRewardedAdUnit] = useState<string>(() => {
     return localStorage.getItem("unity_rewarded_ad_unit") || "Rewarded_Android";
   });
@@ -317,7 +334,7 @@ export default function App() {
   // Fetch active Dana Kaget link from server
   const fetchDanaKaget = async () => {
     try {
-      const res = await fetch("/api/dana-kaget");
+      const res = await fetch(getApiUrl("/api/dana-kaget"));
       if (res.ok) {
         const data = await res.json();
         const incomingLink = data.link || "";
@@ -440,7 +457,7 @@ export default function App() {
       return;
     }
     try {
-      const res = await fetch("/api/admin/dana-kaget", {
+      const res = await fetch(getApiUrl("/api/admin/dana-kaget"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -462,7 +479,7 @@ export default function App() {
 
   const handleDeleteDanaKaget = async () => {
     try {
-      const res = await fetch("/api/admin/dana-kaget", {
+      const res = await fetch(getApiUrl("/api/admin/dana-kaget"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -490,7 +507,7 @@ export default function App() {
     try {
       setLoading(true);
       setErrorMessage("");
-      const res = await fetch(`/api/games?page=${targetPage}&pagination=12&category=${category}&search=${search}`);
+      const res = await fetch(getApiUrl(`/api/games?page=${targetPage}&pagination=12&category=${category}&search=${search}`));
       if (!res.ok) {
         throw new Error("Gagal mengambil data game dari server.");
       }
@@ -633,7 +650,7 @@ export default function App() {
 
     try {
       setLoading(true);
-      const res = await fetch("/api/withdraw", {
+      const res = await fetch(getApiUrl("/api/withdraw"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -675,7 +692,7 @@ export default function App() {
   const fetchAdminWithdrawals = async (passCodeToTry: string = adminPasscode) => {
     try {
       setAdminLoading(true);
-      const res = await fetch(`/api/admin/withdrawals?passcode=${encodeURIComponent(passCodeToTry)}`);
+      const res = await fetch(getApiUrl(`/api/admin/withdrawals?passcode=${encodeURIComponent(passCodeToTry)}`));
       if (!res.ok) {
         const errData = await res.json();
         throw new Error(errData.error || "Gagal memuat daftar penarikan.");
@@ -694,7 +711,7 @@ export default function App() {
   // Approves/Rejects a specific payout transaction
   const handleUpdateStatus = async (wdId: string, newStatus: "Disetujui" | "Ditolak") => {
     try {
-      const res = await fetch(`/api/admin/withdrawals/${wdId}`, {
+      const res = await fetch(getApiUrl(`/api/admin/withdrawals/${wdId}`), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -725,7 +742,7 @@ export default function App() {
       return;
     }
     try {
-      const res = await fetch("/api/admin/change-password", {
+      const res = await fetch(getApiUrl("/api/admin/change-password"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -2205,6 +2222,27 @@ export default function App() {
                         </div>
                         <p className="text-[8px] text-purple-400/80 mt-1.5 leading-relaxed">
                           Masukkan <strong>Game ID Android</strong> yang tertera pada dashboard Unity Cloud Anda (seperti screenshot Anda). Kode ini menghubungkan tombol "Tonton Video" ke unit iklan asli milik Anda saat dibuild menjadi file APK Android.
+                        </p>
+                      </div>
+
+                      {/* API SERVER CONNECTION SETTING */}
+                      <div className="border-t border-purple-900/30 pt-3">
+                        <label className="block text-[10px] text-purple-300 font-bold mb-1 flex items-center gap-1">
+                          📡 Domain / Host API Server (Untuk APK Android)
+                        </label>
+                        <input 
+                          type="text"
+                          value={apiHost}
+                          onChange={(e) => {
+                            const val = e.target.value.trim();
+                            setApiHost(val);
+                            localStorage.setItem("pusat_game_api_host", val);
+                          }}
+                          placeholder="https://..."
+                          className="w-full p-2 bg-[#120525] border border-purple-500/20 rounded-lg text-xs text-blue-300 font-mono tracking-wide focus:border-purple-400 focus:outline-none focus:ring-1 focus:ring-purple-400"
+                        />
+                        <p className="text-[8px] text-purple-400/80 mt-1.5 leading-relaxed">
+                          Masukkan URL backend real-time server web produksi tempat endpoint kueri game disimpan. Secara default disinkronkan ke AI Studio Cloud Run Engine Anda.
                         </p>
                       </div>
                     </div>
