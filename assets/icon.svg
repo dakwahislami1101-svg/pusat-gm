@@ -1,0 +1,313 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <!-- Background Gradients -->
+    <radialGradient id="bgGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#2a085c" />
+      <stop offset="60%" stop-color="#0c041f" />
+      <stop offset="100%" stop-color="#05010e" />
+    </radialGradient>
+    <radialGradient id="neonGlowRing" cx="50%" cy="50%" r="48%">
+      <stop offset="85%" stop-color="#000000" stop-opacity="0" />
+      <stop offset="95%" stop-color="#9d4edd" stop-opacity="0.8" />
+      <stop offset="100%" stop-color="#00f2fe" stop-opacity="1" />
+    </radialGradient>
+    
+    <!-- Gold Gradients for Crowns -->
+    <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffe259" />
+      <stop offset="50%" stop-color="#ffa751" />
+      <stop offset="100%" stop-color="#ff7b00" />
+    </linearGradient>
+    <linearGradient id="goldGradSoft" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#fff8db" />
+      <stop offset="100%" stop-color="#f5a623" />
+    </linearGradient>
+
+    <!-- Controller Gradients -->
+    <linearGradient id="controllerBody" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#2d3238" />
+      <stop offset="40%" stop-color="#1e222b" />
+      <stop offset="100%" stop-color="#090a10" />
+    </linearGradient>
+    <linearGradient id="controllerAccent" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#ff007f" />
+      <stop offset="50%" stop-color="#7928ca" />
+      <stop offset="100%" stop-color="#00dfd8" />
+    </linearGradient>
+    <linearGradient id="neonCyanGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00dfd8" />
+      <stop offset="100%" stop-color="#0072ff" />
+    </linearGradient>
+    <linearGradient id="neonOrangeGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ff9900" />
+      <stop offset="100%" stop-color="#ff4500" />
+    </linearGradient>
+
+    <!-- Button Gradients -->
+    <radialGradient id="btnY" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#fffb00" />
+      <stop offset="100%" stop-color="#d48800" />
+    </radialGradient>
+    <radialGradient id="btnB" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#ff4d4f" />
+      <stop offset="100%" stop-color="#cf1322" />
+    </radialGradient>
+    <radialGradient id="btnA" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#73d13d" />
+      <stop offset="100%" stop-color="#389e0d" />
+    </radialGradient>
+    <radialGradient id="btnX" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#40a9ff" />
+      <stop offset="100%" stop-color="#096dd9" />
+    </radialGradient>
+
+    <!-- Text Glow & Shadow Filters -->
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="8" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+    <filter id="glowStrong" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="15" result="blur1" />
+      <feGaussianBlur stdDeviation="5" result="blur2" />
+      <feMerge>
+        <feMergeNode in="blur1" />
+        <feMergeNode in="blur2" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="8" stdDeviation="6" flood-color="#000" flood-opacity="0.6"/>
+    </filter>
+  </defs>
+
+  <!-- BACKGROUND: Deep Royal Cosmic Space with squircle corners (perfect for Android/iOS icons) -->
+  <rect width="512" height="512" rx="112" fill="url(#bgGlow)" />
+
+  <!-- NEON ATMOSPHERE: Radial magenta/purple central background glow (from screenshots) -->
+  <circle cx="256" cy="256" r="210" fill="#7209b7" opacity="0.32" filter="url(#glowStrong)" />
+  <circle cx="256" cy="270" r="140" fill="#ff007f" opacity="0.15" filter="url(#glowStrong)" />
+
+  <!-- CIRCUIT TRACKS AND HIGH-TECH LINES (Anti-AI-Slop precise geometry) -->
+  <g opacity="0.18" stroke="#00f2fe" stroke-width="1.5" fill="none">
+    <!-- Bottom Left Circuit -->
+    <path d="M 60 400 L 120 400 L 145 375 L 145 350" />
+    <path d="M 40 370 L 90 370 L 110 350" />
+    <circle cx="145" cy="350" r="3" fill="#00f2fe" />
+    <circle cx="110" cy="350" r="2" fill="#00f2fe" />
+
+    <!-- Bottom Right Circuit -->
+    <path d="M 452 400 L 392 400 L 367 375 L 367 350" />
+    <path d="M 472 370 L 422 370 L 402 350" />
+    <circle cx="367" cy="350" r="3" fill="#00f2fe" />
+    <circle cx="402" cy="350" r="2" fill="#00f2fe" />
+
+    <!-- Top Left Circuit -->
+    <path d="M 70 120 L 120 120 L 135 140" />
+    <circle cx="135" cy="140" r="2" fill="#00f2fe" />
+
+    <!-- Top Right Circuit -->
+    <path d="M 442 120 L 392 120 L 377 140" />
+    <circle cx="377" cy="140" r="2" fill="#00f2fe" />
+  </g>
+
+  <!-- OUTER NEON RING (Cyber Portal) -->
+  <circle cx="256" cy="256" r="215" fill="none" stroke="url(#neonGlowRing)" stroke-width="4" filter="url(#glow)" />
+  <!-- Dashed Segmented Tech Circle -->
+  <circle cx="256" cy="256" r="200" fill="none" stroke="#00dfd8" stroke-width="1.5" stroke-dasharray="32 12 10 12 4 12" opacity="0.4" />
+  <circle cx="256" cy="256" r="225" fill="none" stroke="#9d4edd" stroke-width="1" stroke-dasharray="8 300 40 100" opacity="0.6" />
+
+  <!-- SPARKLING STARS & LIGHTNING BOLTS (Placed dynamically like in screenshot) -->
+  <g filter="url(#glow)">
+    <!-- 4-point neon cyan star top left -->
+    <path d="M 112 110 L 115 119 L 124 122 L 115 125 L 112 134 L 109 125 L 100 122 L 109 119 Z" fill="#00f2fe" />
+    <circle cx="112" cy="122" r="2" fill="#ffffff" />
+
+    <!-- 4-point gold star far left -->
+    <path d="M 60 210 L 63 216 L 69 219 L 63 222 L 60 228 L 57 222 L 51 219 L 57 216 Z" fill="url(#goldGrad)" />
+
+    <!-- 4-point neon cyan star top center-right -->
+    <path d="M 330 150 L 332 155 L 337 157 L 332 159 L 330 164 L 328 159 L 323 157 L 328 155 Z" fill="#00f2fe" />
+
+    <!-- Gold star top center-left -->
+    <path d="M 188 140 L 191 146 L 197 148 L 191 150 L 188 156 L 185 150 L 179 148 L 185 146 Z" fill="url(#goldGrad)" />
+    
+    <!-- Sparkling yellow-gold star near bottom-left of controller -->
+    <path d="M 148 308 L 151 312 L 155 314 L 151 316 L 148 320 L 145 316 L 141 314 L 145 312 Z" fill="#ffea00" />
+    
+    <!-- Sparkling light blue star near bottom-right of controller -->
+    <path d="M 364 308 L 366 312 L 370 314 L 366 316 L 364 320 L 362 316 L 358 314 L 362 312 Z" fill="#00f2fe" />
+    
+    <!-- Giant neon cyan star behind crown -->
+    <path d="M 115 220 L 118 226 L 124 228 L 118 230 L 115 236 L 112 230 L 106 228 L 112 226 Z" fill="#00f2fe" opacity="0.65" />
+  </g>
+
+  <!-- LIGHTNING BOLT / COGNITIVE CHARGING SPARKS -->
+  <!-- Lightning Right -->
+  <path d="M 330 75 Q 350 95 340 100 L 354 88 L 342 120 L 364 105 L 350 135" fill="none" stroke="#ffea00" stroke-width="2.5" stroke-linecap="round" filter="url(#glow)" />
+  <!-- Lightning Left -->
+  <path d="M 182 75 Q 162 95 172 100 L 158 88 L 170 120 L 148 105 L 162 135" fill="none" stroke="#ffea00" stroke-width="2.5" stroke-linecap="round" filter="url(#glow)" />
+
+  <!-- ROYAL GOLDEN CROWNS (Pro and Elite gaming symbol - as requested in design) -->
+  <g filter="url(#shadow)">
+    <!-- 1. Bigger Top Crown -->
+    <path d="M 216 110 
+             L 224 82 
+             L 242 98 
+             L 256 70 
+             L 270 98 
+             L 288 82 
+             L 296 110 
+             Z" fill="url(#goldGrad)" />
+    <!-- Crown base -->
+    <rect x="214" y="108" width="84" height="5" rx="2.5" fill="url(#goldGradSoft)" stroke="#814a00" stroke-width="1" />
+    <!-- Crown Jewels (Gems) -->
+    <circle cx="224" cy="80" r="3.5" fill="#ffffff" filter="url(#glow)" />
+    <circle cx="256" cy="68" r="4.5" fill="#ff0055" filter="url(#glow)" />
+    <circle cx="288" cy="80" r="3.5" fill="#ffffff" filter="url(#glow)" />
+    <circle cx="236" cy="110.5" r="2" fill="#00f2fe" />
+    <circle cx="256" cy="110.5" r="2.5" fill="#ff0055" />
+    <circle cx="276" cy="110.5" r="2" fill="#00f2fe" />
+
+    <!-- 2. Smaller Inner Crown (floating elegantly inside) -->
+    <path d="M 228 160 
+             L 233 142 
+             L 246 153 
+             L 256 134 
+             L 266 153 
+             L 279 142 
+             L 284 160 
+             Z" fill="url(#goldGrad)" opacity="0.9" />
+    <rect x="227" y="159" width="58" height="3" rx="1.5" fill="url(#goldGradSoft)" stroke="#814a00" stroke-width="0.5" opacity="0.9" />
+    <circle cx="256" cy="133" r="3" fill="#ff0055" filter="url(#glow)" />
+  </g>
+
+  <!-- CORE GAMING CONTROLLER / GAMEPAD -->
+  <g filter="url(#shadow)">
+    <!-- Outer Glow Silhouette -->
+    <path d="M 160 215 
+             C 180 195, 332 195, 352 215 
+             C 368 231, 372 265, 362 305 
+             C 353 340, 324 355, 310 325 
+             C 298 300, 280 295, 256 295 
+             C 232 295, 214 300, 202 325 
+             C 188 355, 159 340, 150 305 
+             C 140 265, 144 231, 160 215 Z" 
+          fill="none" stroke="url(#controllerAccent)" stroke-width="5" filter="url(#glow)" />
+
+    <!-- Controller Main Body Plate -->
+    <path id="ctrlBody" d="M 160 215 
+             C 180 195, 332 195, 352 215 
+             C 368 231, 372 265, 362 305 
+             C 353 340, 324 355, 310 325 
+             C 298 300, 280 295, 256 295 
+             C 232 295, 214 300, 202 325 
+             C 188 355, 159 340, 150 305 
+             C 140 265, 144 231, 160 215 Z" 
+          fill="url(#controllerBody)" stroke="#434955" stroke-width="2.5" />
+
+    <!-- Dynamic Neon Cyber Grip Plates (Left and Right handle cosmetics) -->
+    <path d="M 152 270 C 150 290, 154 315, 164 328 C 168 333, 175 330, 178 322 C 184 306, 185 285, 174 256" fill="none" stroke="url(#neonOrangeGrad)" stroke-width="4.5" stroke-linecap="round" filter="url(#glow)" />
+    <path d="M 360 270 C 362 290, 358 315, 348 328 C 344 333, 337 330, 334 322 C 328 306, 327 285, 338 256" fill="none" stroke="url(#neonOrangeGrad)" stroke-width="4.5" stroke-linecap="round" filter="url(#glow)" />
+
+    <path d="M 162 225 C 185 212, 220 216, 232 230" fill="none" stroke="url(#neonCyanGrad)" stroke-width="2" opacity="0.6" />
+    <path d="M 350 225 C 327 212, 292 216, 280 230" fill="none" stroke="url(#neonCyanGrad)" stroke-width="2" opacity="0.6" />
+
+    <!-- Center LED Orb & Brand Logo -->
+    <circle cx="256" cy="226" r="16" fill="#141822" stroke="#2a3040" stroke-width="2" />
+    <circle cx="256" cy="226" r="11" fill="none" stroke="#00f2fe" stroke-width="1.5" filter="url(#glow)" />
+    <!-- X-Logo inside center button -->
+    <path d="M 252 222 L 260 230 M 260 222 L 252 230" stroke="#fff" stroke-width="1.5" stroke-linecap="round" />
+
+    <!-- Select / Start Utility Buttons -->
+    <rect x="220" y="235" width="10" height="4" rx="2" fill="#52c41a" transform="rotate(-15 220 235)" filter="url(#glow)" />
+    <rect x="282" y="235" width="10" height="4" rx="2" fill="#1890ff" transform="rotate(15 282 235)" filter="url(#glow)" />
+
+    <!-- DIRECTIONAL PAD (D-PAD) - Left Side -->
+    <g transform="translate(192, 268)">
+      <circle cx="0" cy="0" r="22" fill="#161920" stroke="#313644" stroke-width="1.5" />
+      <path d="M -16 -5 C -16 -5, -6 -5, -6 -13 C -6 -16, 6 -16, 6 -13 C 6 -5, 16 -5, 16 -5 C 18 -5, 18 5, 16 5 C 16 5, 6 5, 6 13 C 6 16, -6 16, -6 13 C -6 5, -16 5, -16 5 C -18 5, -18 -5, -16 -5 Z" fill="#2d3240" stroke="#4c5366" stroke-width="1" />
+      <!-- Inner detail crosses -->
+      <path d="M -12 0 L 12 0 M 0 -12 L 0 12" stroke="#10121a" stroke-width="2" stroke-linecap="round" />
+      <!-- Glow Arrows on D-PAD -->
+      <path d="M -11 0 L -8 -3 M -8 3 L -11 0" stroke="#ff9900" stroke-width="1.5" fill="none" stroke-linecap="round" filter="url(#glow)" />
+      <path d="M 11 0 L 8 -3 M 8 3 L 11 0" fill="none" stroke="#ff9900" stroke-width="1.5" stroke-linecap="round" filter="url(#glow)" />
+      <path d="M 0 -11 L -3 -8 M 3 -8 L 0 -11" fill="none" stroke="#ff9900" stroke-width="1.5" stroke-linecap="round" filter="url(#glow)" />
+      <path d="M 0 11 L -3 8 M 3 8 L 0 11" fill="none" stroke="#ff9900" stroke-width="1.5" stroke-linecap="round" filter="url(#glow)" />
+    </g>
+
+    <!-- ANALOG JOYSTICK - Right-Center Lower -->
+    <g transform="translate(290, 275)">
+      <!-- Outer Ring -->
+      <circle cx="0" cy="0" r="20" fill="#141720" stroke="#2f3442" stroke-width="1.5" />
+      <!-- Textured inner stick -->
+      <circle cx="-2" cy="1" r="14" fill="#222630" stroke="#474e61" stroke-width="1" />
+      <!-- Grip Ridges -->
+      <line x1="-7" y1="-3" x2="-3" y2="-7" stroke="#151720" stroke-width="1.5" />
+      <line x1="1" y1="5" x2="5" y2="1" stroke="#151720" stroke-width="1.5" />
+      <circle cx="-2" cy="1" r="10" fill="none" stroke="#00f2fe" stroke-width="1-5" opacity="0.7" />
+    </g>
+
+    <!-- ACTION BUTTONS (ABXY) - Right Side in beautiful gloss circles -->
+    <g transform="translate(315, 245)">
+      <!-- Y-Button (Top) -->
+      <g transform="translate(0, -18)">
+        <circle cx="0" cy="0" r="9.5" fill="url(#btnY)" />
+        <circle cx="0" cy="0" r="9.5" fill="none" stroke="#fff" stroke-width="0.7" opacity="0.5" />
+        <text x="0" y="3.5" font-family="'Inter', sans-serif" font-weight="900" font-size="10.5" fill="#302000" text-anchor="middle">Y</text>
+      </g>
+      <!-- X-Button (Left) -->
+      <g transform="translate(-18, 0)">
+        <circle cx="0" cy="0" r="9.5" fill="url(#btnX)" />
+        <circle cx="0" cy="0" r="9.5" fill="none" stroke="#fff" stroke-width="0.7" opacity="0.5" filter="url(#glow)" />
+        <text x="0" y="3.5" font-family="'Inter', sans-serif" font-weight="900" font-size="10.5" fill="#ffffff" text-anchor="middle">X</text>
+      </g>
+      <!-- B-Button (Right) -->
+      <g transform="translate(18, 0)">
+        <circle cx="0" cy="0" r="9.5" fill="url(#btnB)" />
+        <circle cx="0" cy="0" r="9.5" fill="none" stroke="#fff" stroke-width="0.7" opacity="0.5" filter="url(#glow)" />
+        <text x="0" y="3.5" font-family="'Inter', sans-serif" font-weight="900" font-size="10.5" fill="#ffffff" text-anchor="middle">B</text>
+      </g>
+      <!-- A-Button (Bottom) -->
+      <g transform="translate(0, 18)">
+        <circle cx="0" cy="0" r="9.5" fill="url(#btnA)" />
+        <circle cx="0" cy="0" r="9.5" fill="none" stroke="#fff" stroke-width="0.7" opacity="0.5" />
+        <text x="0" y="3.5" font-family="'Inter', sans-serif" font-weight="900" font-size="10.5" fill="#ffffff" text-anchor="middle">A</text>
+      </g>
+    </g>
+
+    <!-- Cool Neon Cyan Line Trace across the controller -->
+    <path d="M 188 232 C 220 248, 292 248, 324 232" fill="none" stroke="#00f2fe" stroke-width="2" filter="url(#glow)" opacity="0.8" />
+  </g>
+
+  <!-- PUSAT GAME DISPLAY BRANDING (Strictly centered, highly dynamic, italicized geometric typography) -->
+  <g transform="translate(256, 436)" filter="url(#shadow)">
+    <!-- Back Glow under title -->
+    <text x="0" y="0" 
+          font-family="'Impact', 'Arial Black', system-ui, sans-serif" 
+          font-weight="900" 
+          font-size="44" 
+          font-style="italic" 
+          letter-spacing="1.5" 
+          fill="#00f2fe" 
+          text-anchor="middle" 
+          filter="url(#glowStrong)" 
+          opacity="0.8">PUSAT GAME</text>
+
+    <!-- Foreground crisp text -->
+    <text x="0" y="0" 
+          font-family="'Impact', 'Arial Black', system-ui, sans-serif" 
+          font-weight="900" 
+          font-size="44" 
+          font-style="italic" 
+          letter-spacing="1.5" 
+          fill="#ffffff" 
+          stroke="#05010e" 
+          stroke-width="2" 
+          text-anchor="middle">PUSAT GAME</text>
+
+    <!-- Underline Neon Decal -->
+    <path d="M -140 12 L 140 12" stroke="url(#controllerAccent)" stroke-width="4.5" stroke-linecap="round" filter="url(#glow)" />
+    <!-- Underline crisp border -->
+    <path d="M -110 12 L 110 12" stroke="#ffffff" stroke-width="1.5" stroke-linecap="round" />
+  </g>
+</svg>

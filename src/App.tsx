@@ -77,6 +77,10 @@ export default function App() {
   const [danaKagetLink, setDanaKagetLink] = useState("");
   const [danaKagetTime, setDanaKagetTime] = useState("");
   const [adminDanaKagetInput, setAdminDanaKagetInput] = useState("");
+  const [adsTextContent, setAdsTextContent] = useState("");
+  const [isSavingAdsText, setIsSavingAdsText] = useState(false);
+  const [gamepixSid, setGamepixSid] = useState("5O352");
+  const [isSavingSid, setIsSavingSid] = useState(false);
 
   // Dynamic Reward Settings (Adjustable by Admin)
   const [rewardMin, setRewardMin] = useState<number>(() => {
@@ -705,11 +709,94 @@ export default function App() {
       const data = await res.json();
       setAdminWithdrawals(data.withdrawals || []);
       setIsAdminLoggedIn(true);
+      // Fetch ads.txt content as well once logged in successfully
+      fetchAdsTxt(passCodeToTry);
+      fetchGamepixSid(passCodeToTry);
     } catch (err: any) {
       alert(err.message || "Kode sandi Admin salah atau gagal mengambil data.");
       setIsAdminLoggedIn(false);
     } finally {
       setAdminLoading(false);
+    }
+  };
+
+  // Fetches GamePix SID for the Admin Panel
+  const fetchGamepixSid = async (passCodeToTry: string = adminPasscode) => {
+    try {
+      const res = await fetch(getApiUrl(`/api/admin/gamepix-sid?passcode=${encodeURIComponent(passCodeToTry)}`));
+      if (res.ok) {
+        const data = await res.json();
+        setGamepixSid(data.sid || "5O352");
+      }
+    } catch (err) {
+      console.error("Gagal mengambil GamePix SID:", err);
+    }
+  };
+
+  // Saves updated GamePix SID from Admin panel
+  const handleSaveGamepixSid = async () => {
+    if (isSavingSid) return;
+    try {
+      setIsSavingSid(true);
+      const res = await fetch(getApiUrl("/api/admin/gamepix-sid"), {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          passcode: adminPasscode,
+          sid: gamepixSid,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Gagal menyimpan GamePix SID");
+      }
+      alert(data.message || "GamePix SID berhasil diperbarui!");
+    } catch (err: any) {
+      alert("Error: " + err.message);
+    } finally {
+      setIsSavingSid(false);
+    }
+  };
+
+  // Fetches ads.txt content for the Admin Panel
+  const fetchAdsTxt = async (passCodeToTry: string = adminPasscode) => {
+    try {
+      const res = await fetch(getApiUrl(`/api/admin/ads?passcode=${encodeURIComponent(passCodeToTry)}`));
+      if (res.ok) {
+        const data = await res.json();
+        setAdsTextContent(data.content || "");
+      }
+    } catch (err) {
+      console.error("Gagal mengambil konfigurasi ads.txt:", err);
+    }
+  };
+
+  // Saves updated ads.txt config from Admin panel
+  const handleSaveAdsTxt = async () => {
+    if (isSavingAdsText) return;
+    try {
+      setIsSavingAdsText(true);
+      const res = await fetch(getApiUrl("/api/admin/ads"), {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          passcode: adminPasscode,
+          content: adsTextContent,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Gagal menyimpan ads.txt");
+      }
+      alert(data.message || "ads.txt berhasil diperbarui!");
+    } catch (err: any) {
+      alert("Error: " + err.message);
+    } finally {
+      setIsSavingAdsText(false);
     }
   };
 
@@ -2248,6 +2335,60 @@ export default function App() {
                         />
                         <p className="text-[8px] text-purple-400/80 mt-1.5 leading-relaxed">
                           Masukkan URL backend real-time server web produksi tempat endpoint kueri game disimpan. Secara default disinkronkan ke AI Studio Cloud Run Engine Anda.
+                        </p>
+                      </div>
+
+                      {/* ADS.TXT GLOBAL MONETIZATION CONFIG */}
+                      <div className="border-t border-purple-900/30 pt-3">
+                        <label className="block text-[10px] text-purple-300 font-bold mb-1 flex items-center justify-between">
+                          <span>📝 Konfigurasi ads.txt (Monetisasi GamePix / AdSense)</span>
+                          <span className="text-[8px] bg-purple-900/50 px-1.5 py-0.5 rounded text-purple-400">root/ads.txt</span>
+                        </label>
+                        <div className="space-y-2">
+                          <textarea 
+                            value={adsTextContent}
+                            onChange={(e) => setAdsTextContent(e.target.value)}
+                            placeholder="# Silakan tempel baris ads.txt Anda di sini..."
+                            rows={4}
+                            className="w-full p-2 bg-[#120525] border border-purple-500/20 rounded-lg text-[10px] text-yellow-300 placeholder-purple-400/30 font-mono focus:border-purple-400 focus:outline-none focus:ring-1 focus:ring-purple-400 resize-y"
+                          />
+                          <button
+                            onClick={handleSaveAdsTxt}
+                            disabled={isSavingAdsText}
+                            className="w-full py-1.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:brightness-110 disabled:brightness-50 text-white font-extrabold text-[10px] rounded-lg shadow-md transition-all active:scale-[0.98] cursor-pointer"
+                          >
+                            {isSavingAdsText ? "⏳ MENYIMPAN..." : "💾 SIMPAN & AKTIFKAN ADS.TXT"}
+                          </button>
+                        </div>
+                        <p className="text-[8px] text-purple-400/80 mt-1.5 leading-relaxed">
+                          Masukkan baris otorisasi penjual iklan Anda (contoh dari GamePix/Google). File ini secara otomatis akan di-host di root domain Anda pada alamat <strong className="text-purple-300">/ads.txt</strong> agar dapat diverifikasi secara global oleh perayap iklan.
+                        </p>
+                      </div>
+
+                      {/* GAMEPIX PUBLISHER SID CONFIG */}
+                      <div className="border-t border-purple-900/30 pt-3">
+                        <label className="block text-[10px] text-purple-300 font-bold mb-1 flex items-center justify-between">
+                          <span>🎮 GamePix Publisher SID (ID Properti)</span>
+                          <span className="text-[8px] bg-purple-900/50 px-1.5 py-0.5 rounded text-purple-400">sid</span>
+                        </label>
+                        <div className="flex gap-2">
+                          <input 
+                            type="text"
+                            value={gamepixSid}
+                            onChange={(e) => setGamepixSid(e.target.value.trim())}
+                            placeholder="Contoh: 5O352"
+                            className="flex-1 p-2 bg-[#120525] border border-purple-500/20 rounded-lg text-xs text-yellow-300 font-mono tracking-wide focus:border-purple-400 focus:outline-none focus:ring-1 focus:ring-purple-400"
+                          />
+                          <button
+                            onClick={handleSaveGamepixSid}
+                            disabled={isSavingSid}
+                            className="px-4 bg-gradient-to-r from-purple-600 to-indigo-600 hover:brightness-110 disabled:brightness-50 text-white font-extrabold text-[10px] rounded-lg shadow-md transition-all active:scale-[0.98] cursor-pointer"
+                          >
+                            {isSavingSid ? "..." : "SIMPAN"}
+                          </button>
+                        </div>
+                        <p className="text-[8px] text-purple-400/80 mt-1.5 leading-relaxed">
+                          Masukkan GamePix Property SID (Publisher SID / Channel ID) terbaru Anda. Koin game dan iklan monetisasi game di web akan otomatis dikreditkan ke ID properti baru Anda!
                         </p>
                       </div>
                     </div>
