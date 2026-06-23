@@ -54,6 +54,10 @@ jobs:
       # Jika Capacitor belum di-init di lokal, langkah ini akan meng-init secara otomatis
       - name: Initialize & Sync Capacitor
         run: |
+          # Instal ImageMagick untuk memproses ikon dan splash screen
+          echo "Menginstal ImageMagick..."
+          sudo apt-get update && sudo apt-get install -y imagemagick
+
           # Install @capacitor/core dan @capacitor/cli jika belum ada
           npm install @capacitor/core @capacitor/cli @capacitor/android --save-dev
           
