@@ -69,6 +69,50 @@ jobs:
             npx cap add android
           fi
 
+          # Buat folder assets jika belum ada
+          mkdir -p assets
+
+          echo "Menyiapkan aset gambar ikon dan splash screen menggunakan ImageMagick..."
+          if [ -f "public/icon-512.jpg" ]; then
+            # Generate icon.png (1024x1024)
+            convert public/icon-512.jpg -resize 1024x1024 assets/icon.png
+            # Generate icon-only.png (1024x1024)
+            convert public/icon-512.jpg -resize 1024x1024 assets/icon-only.png
+            # Generate icon-background.png (1024x1024) - solid dark purple #0d051f
+            convert -size 1024x1024 xc:"#0d051f" assets/icon-background.png
+            
+            # Generate splash.png (2732x2732) - logo dipusatkan di atas background ungu gelap
+            convert -size 2732x2732 xc:"#0d051f" assets/splash-bg.png
+            convert public/icon-512.jpg -resize 512x512 assets/splash-logo.png
+            composite -gravity center assets/splash-logo.png assets/splash-bg.png assets/splash.png
+            
+            # Hapus file temporary splash
+            rm -f assets/splash-bg.png assets/splash-logo.png
+          else
+            echo "Peringatan: public/icon-512.jpg tidak ditemukan. Menggunakan fallback svg..."
+            if [ -f "assets/icon.svg" ] || [ -f "public/icon.svg" ]; then
+              # Jika ada SVG, kita convert ke PNG sebagai fallback
+              SRC_SVG="assets/icon.svg"
+              [ -f "public/icon.svg" ] && SRC_SVG="public/icon.svg"
+              convert -background none -size 1024x1024 "$SRC_SVG" assets/icon.png
+              convert -background none -size 1024x1024 "$SRC_SVG" assets/icon-only.png
+              convert -size 1024x1024 xc:"#0d051f" assets/icon-background.png
+              
+              convert -size 2732x2732 xc:"#0d051f" assets/splash-bg.png
+              convert -background none -size 512x512 "$SRC_SVG" assets/splash-logo.png
+              composite -gravity center assets/splash-logo.png assets/splash-bg.png assets/splash.png
+              rm -f assets/splash-bg.png assets/splash-logo.png
+            fi
+          fi
+
+          # Install tool generator aset Capacitor
+          echo "Menginstal @capacitor/assets..."
+          npm install @capacitor/assets --save-dev
+
+          # Generate resource Android (ikon launcher, adaptive icon, splash screen)
+          echo "Menghasilkan ikon aplikasi native Android dan splash screen..."
+          npx @capacitor/assets generate --android
+
           # Update Version Name dan Version Code secara dinamis di build.gradle agar bisa diupdate langsung di Google Play Store
           if [ -f "android/app/build.gradle" ]; then
             echo "Mengupdate versi aplikasi di android/app/build.gradle ke 1.1.0 (versionCode 2)..."
