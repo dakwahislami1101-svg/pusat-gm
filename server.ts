@@ -76,12 +76,12 @@ async function startServer() {
     try {
       const sidPath = path.join(process.cwd(), "public", "gamepix_sid.txt");
       if (fs.existsSync(sidPath)) {
-        return fs.readFileSync(sidPath, "utf8").trim() || "5O352";
+        return fs.readFileSync(sidPath, "utf8").trim() || "2462C";
       }
     } catch (e) {
       console.error("Gagal membaca gamepix_sid.txt:", e);
     }
-    return "5O352";
+    return "2462C";
   }
 
   // Set active GamePix SID

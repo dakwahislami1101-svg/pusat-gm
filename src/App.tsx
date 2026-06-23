@@ -154,8 +154,12 @@ export default function App() {
   const [adminDanaKagetInput, setAdminDanaKagetInput] = useState("");
   const [adsTextContent, setAdsTextContent] = useState("");
   const [isSavingAdsText, setIsSavingAdsText] = useState(false);
-  const [gamepixSid, setGamepixSid] = useState("5O352");
+  const [gamepixSid, setGamepixSid] = useState("2462C");
   const [isSavingSid, setIsSavingSid] = useState(false);
+
+  // Game Play Reward Timer (30 seconds)
+  const [gameTimeElapsed, setGameTimeElapsed] = useState<number>(0);
+  const [rewardClaimedForCurrentSession, setRewardClaimedForCurrentSession] = useState<boolean>(false);
 
   // Splashscreen states
   const [showSplash, setShowSplash] = useState(true);
@@ -382,6 +386,51 @@ export default function App() {
 
     return () => clearInterval(interval);
   }, [playingGame]);
+
+  // Game Play Reward Timer (30 seconds)
+  useEffect(() => {
+    if (!playingGame) {
+      setGameTimeElapsed(0);
+      setRewardClaimedForCurrentSession(false);
+      return;
+    }
+
+    setGameTimeElapsed(0);
+    setRewardClaimedForCurrentSession(false);
+
+    const interval = setInterval(() => {
+      setGameTimeElapsed((prev) => {
+        const nextTime = prev + 1;
+        if (nextTime >= 30) {
+          clearInterval(interval);
+          
+          setRewardClaimedForCurrentSession((claimed) => {
+            if (!claimed) {
+              const min = Number(rewardMin) || 0;
+              const max = Number(rewardMax) || 0;
+              const range = Math.max(0, max - min) + 1;
+              const rewardBonus = Math.floor(Math.random() * range) + min;
+
+              setDanaBalance(curr => curr + rewardBonus);
+              setClaimAmount(rewardBonus);
+              setShowClaimSuccess(true);
+              showNotification(
+                "🎮 Bonus Bermain Game!",
+                `Selamat! Anda mengklaim +${rewardBonus.toLocaleString("id-ID")} Koin dari aktivitas bermain game selama 30 detik!`,
+                "💰",
+                "coin"
+              );
+            }
+            return true;
+          });
+          return 30;
+        }
+        return nextTime;
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [playingGame, rewardMin, rewardMax]);
 
   // Persist seconds remaining
   useEffect(() => {
@@ -1032,24 +1081,6 @@ export default function App() {
     setPlayingGame(game);
     setSelectedGame(null);
     setGamesPlayedCount(prev => prev + 1);
-    
-    // Memberikan bonus saldo DANA setiap kali memulai bermain game!
-    const min = Number(rewardMin) || 0;
-    const max = Number(rewardMax) || 0;
-    const range = Math.max(0, max - min) + 1;
-    const rewardBonus = Math.floor(Math.random() * range) + min;
-    
-    setTimeout(() => {
-      setDanaBalance(prev => prev + rewardBonus);
-      setClaimAmount(rewardBonus);
-      setShowClaimSuccess(true);
-      showNotification(
-        "🎮 Bonus Bermain Game!",
-        `Selamat! Anda mengklaim +${rewardBonus.toLocaleString("id-ID")} Koin dari aktivitas bermain game!`,
-        "💰",
-        "coin"
-      );
-    }, 3000); // Popup rewards appear after 3s of loading
   };
 
   // Lucky wheel spin function
@@ -1175,7 +1206,7 @@ export default function App() {
       const res = await fetch(getApiUrl(`/api/admin/gamepix-sid?passcode=${encodeURIComponent(passCodeToTry)}`));
       if (res.ok) {
         const data = await res.json();
-        setGamepixSid(data.sid || "5O352");
+        setGamepixSid(data.sid || "2462C");
       }
     } catch (err) {
       console.error("Gagal mengambil GamePix SID:", err);
@@ -2130,13 +2161,37 @@ export default function App() {
             </div>
 
             {/* In-Play Gamified Rewards progress footer */}
-            <div className="bg-[#120726] border-t border-purple-900/40 px-4 py-2.5 flex items-center justify-between text-[11px] text-purple-300">
-              <div className="flex items-center gap-1.5 text-emerald-400 font-bold">
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
-                Earning Saldo Aktif
+            <div className="bg-[#120726] border-t border-purple-900/40 px-4 py-2.5 flex flex-col sm:flex-row items-center justify-between gap-3 text-[11px] text-purple-300">
+              <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-start">
+                <div className="flex items-center gap-1.5 text-emerald-400 font-bold">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+                  {gameTimeElapsed >= 30 ? "Misi Selesai" : "Misi Bermain"}
+                </div>
+                
+                {/* Visual Progress Bar */}
+                <div className="flex items-center gap-2">
+                  <div className="w-24 sm:w-40 h-2 bg-purple-950 rounded-full overflow-hidden border border-purple-900/30">
+                    <div 
+                      className="bg-gradient-to-r from-purple-500 to-emerald-400 h-full transition-all duration-1000 ease-linear" 
+                      style={{ width: `${Math.min(100, (gameTimeElapsed / 30) * 100)}%` }} 
+                    />
+                  </div>
+                  <span className="font-mono text-[10px] text-purple-200">
+                    {gameTimeElapsed}/30s
+                  </span>
+                </div>
               </div>
-              <div>
-                Tutup game kapan saja untuk kembali menyimpan reward Anda!
+
+              <div className="text-center sm:text-right w-full sm:w-auto font-medium">
+                {gameTimeElapsed >= 30 ? (
+                  <span className="text-emerald-400 font-semibold animate-pulse">
+                    ✨ Selamat! Bonus Koin berhasil diklaim ke saldo Anda!
+                  </span>
+                ) : (
+                  <span>
+                    Mainkan game <strong className="text-yellow-400">{30 - gameTimeElapsed} detik</strong> lagi untuk mendapatkan Koin gratis!
+                  </span>
+                )}
               </div>
             </div>
           </motion.div>
@@ -3126,7 +3181,7 @@ export default function App() {
                             type="text"
                             value={gamepixSid}
                             onChange={(e) => setGamepixSid(e.target.value.trim())}
-                            placeholder="Contoh: 5O352"
+                            placeholder="Contoh: 2462C"
                             className="flex-1 p-2 bg-[#120525] border border-purple-500/20 rounded-lg text-xs text-yellow-300 font-mono tracking-wide focus:border-purple-400 focus:outline-none focus:ring-1 focus:ring-purple-400"
                           />
                           <button

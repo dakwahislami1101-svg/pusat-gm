@@ -68,6 +68,15 @@ jobs:
             echo "Menambahkan platform Android..."
             npx cap add android
           fi
+
+          # Update Version Name dan Version Code secara dinamis di build.gradle agar bisa diupdate langsung di Google Play Store
+          if [ -f "android/app/build.gradle" ]; then
+            echo "Mengupdate versi aplikasi di android/app/build.gradle ke 1.1.0 (versionCode 2)..."
+            # Ganti versionCode default (1) dengan 2
+            sed -i 's/versionCode 1/versionCode 2/g' android/app/build.gradle
+            # Ganti versionName default ("1.0") dengan "1.1.0"
+            sed -i 's/versionName "1.0"/versionName "1.1.0"/g' android/app/build.gradle
+          fi
           
           # Sync assets web ke folder Android
           npx cap sync android
