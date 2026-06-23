@@ -17,9 +17,83 @@ import {
   TrendingUp, 
   Trophy, 
   Gift,
-  Bell 
+  Bell,
+  LogIn,
+  LogOut,
+  User as UserIcon,
+  CheckCircle2,
+  Shield,
+  RefreshCw
 } from "lucide-react";
+import { onAuthStateChanged, signInWithPopup, signOut, User } from "firebase/auth";
+import { doc, getDoc, setDoc, updateDoc, onSnapshot } from "firebase/firestore";
+import { auth, googleProvider, db } from "./lib/firebase";
 import { Game } from "./types";
+
+
+enum OperationType {
+  CREATE = 'create',
+  UPDATE = 'update',
+  DELETE = 'delete',
+  LIST = 'list',
+  GET = 'get',
+  WRITE = 'write',
+}
+
+interface FirestoreErrorInfo {
+  error: string;
+  operationType: OperationType;
+  path: string | null;
+  authInfo: {
+    userId?: string | null;
+    email?: string | null;
+    emailVerified?: boolean | null;
+    isAnonymous?: boolean | null;
+    tenantId?: string | null;
+    providerInfo?: {
+      providerId?: string | null;
+      email?: string | null;
+    }[];
+  }
+}
+
+function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+  const errInfo: FirestoreErrorInfo = {
+    error: error instanceof Error ? error.message : String(error),
+    authInfo: {
+      userId: auth.currentUser?.uid,
+      email: auth.currentUser?.email,
+      emailVerified: auth.currentUser?.emailVerified,
+      isAnonymous: auth.currentUser?.isAnonymous,
+      tenantId: auth.currentUser?.tenantId,
+      providerInfo: auth.currentUser?.providerData?.map(provider => ({
+        providerId: provider.providerId,
+        email: provider.email,
+      })) || []
+    },
+    operationType,
+    path
+  };
+  console.error('Firestore Error: ', JSON.stringify(errInfo));
+  throw new Error(JSON.stringify(errInfo));
+}
+
+const ALLOWED_ADMINS = [
+  "eccko.w9@gmail.com",
+  "dakwahislami1101@gmail.com",
+  "swirbowl@gmail.com",
+  "kedaikita1101@gmail.com",
+  "tobutobu1101@gmail.com",
+  "ekowahyudichannel@gmail.com",
+  "eccko.w4@gmail.com",
+  "satemaduracakmat1101@gmail.com",
+  "dapurcici1101@gmail.com",
+  "satesurabaya1101@gmail.com",
+  "eccko.w10@gmail.com",
+  "eccko.w3@gmail.com",
+  "ecckoku1101@gmail.com",
+  "proseshidup1101@gmail.com"
+];
 
 export default function App() {
   // Game & filtering states
@@ -75,12 +149,25 @@ export default function App() {
 
   // Dana Kaget Share states
   const [danaKagetLink, setDanaKagetLink] = useState("");
+  const [isSyncingSettings, setIsSyncingSettings] = useState(false);
   const [danaKagetTime, setDanaKagetTime] = useState("");
   const [adminDanaKagetInput, setAdminDanaKagetInput] = useState("");
   const [adsTextContent, setAdsTextContent] = useState("");
   const [isSavingAdsText, setIsSavingAdsText] = useState(false);
   const [gamepixSid, setGamepixSid] = useState("5O352");
   const [isSavingSid, setIsSavingSid] = useState(false);
+
+  // Splashscreen states
+  const [showSplash, setShowSplash] = useState(true);
+  const [splashProgress, setSplashProgress] = useState(0);
+  const [splashStatus, setSplashStatus] = useState("Menghubungkan ke Server...");
+
+  // Firebase Authentication & User states
+  const [user, setUser] = useState<User | null>(null);
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
+  const [showProfileModal, setShowProfileModal] = useState(false);
+
 
   // Dynamic Reward Settings (Adjustable by Admin)
   const [rewardMin, setRewardMin] = useState<number>(() => {
@@ -309,23 +396,256 @@ export default function App() {
     return () => clearTimeout(handler);
   }, [searchQuery]);
 
+  // Splash Screen progress timer
+  useEffect(() => {
+    if (showSplash) {
+      const statusTexts = [
+        "Inisialisasi Pusat Game Engine...",
+        "Menghubungkan ke Server Database...",
+        "Memuat Daftar Game Terbaik...",
+        "Sinkronisasi Keamanan DANA Kaget...",
+        "Menginisialisasi Unit Iklan GamePix...",
+        "Hampir Selesai, Menyiapkan Antarmuka...",
+        "Sukses! Selamat Bermain!"
+      ];
+      
+      let currentProgress = 0;
+      const interval = setInterval(() => {
+        currentProgress += Math.floor(Math.random() * 8) + 4;
+        if (currentProgress >= 100) {
+          currentProgress = 100;
+          setSplashProgress(100);
+          setSplashStatus(statusTexts[statusTexts.length - 1]);
+          clearInterval(interval);
+          setTimeout(() => {
+            setShowSplash(false);
+          }, 500); // delay smooth agar transisi terasa mantap
+        } else {
+          setSplashProgress(currentProgress);
+          // Distribusikan teks berdasarkan persentase kemajuan
+          const index = Math.min(
+            Math.floor((currentProgress / 100) * statusTexts.length),
+            statusTexts.length - 2
+          );
+          setSplashStatus(statusTexts[index]);
+        }
+      }, 70);
+      
+      return () => clearInterval(interval);
+    }
+  }, [showSplash]);
+
   // Reset page and reload games list when filtering conditions change
   useEffect(() => {
     setPage(1);
     fetchGames(1, selectedCategory, debouncedSearch, true);
   }, [selectedCategory, debouncedSearch]);
 
-  // Sync favorites & DANA balance back to localStorage
+  // Synchronize dynamic balance/statistic to Firebase
+  const syncToFirebase = async (updates: Record<string, any>) => {
+    if (auth.currentUser) {
+      const path = `users/${auth.currentUser.uid}`;
+      try {
+        const userDocRef = doc(db, "users", auth.currentUser.uid);
+        await setDoc(userDocRef, {
+          ...updates,
+          lastUpdated: new Date().toISOString()
+        }, { merge: true });
+      } catch (err) {
+        handleFirestoreError(err, OperationType.WRITE, path);
+      }
+    }
+  };
+
+  // Listen to Auth State changes & Sync user data
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      setUser(currentUser);
+      if (currentUser) {
+        setIsAuthLoading(true);
+        const path = `users/${currentUser.uid}`;
+        try {
+          const userDocRef = doc(db, "users", currentUser.uid);
+          let userDocSnap = null;
+          let fetchFailed = false;
+          try {
+            userDocSnap = await getDoc(userDocRef);
+          } catch (error) {
+            console.warn("Firestore fetch failed, falling back to local storage:", error);
+            fetchFailed = true;
+            showNotification(
+              "⚠️ Database Sinkronisasi Tertunda",
+              "Gagal terhubung ke cloud. Game Anda tetap berjalan dalam mode offline koin lokal.",
+              "⚠️",
+              "coin"
+            );
+          }
+          
+          if (!fetchFailed && userDocSnap && userDocSnap.exists()) {
+            const dbData = userDocSnap.data();
+            const dbCoins = dbData.coins !== undefined ? dbData.coins : 0;
+            const localCoins = parseInt(localStorage.getItem("pusat_game_dana") || "0", 10);
+            
+            // Smart merging or loading
+            if (localCoins > dbCoins) {
+              setDanaBalance(localCoins);
+              try {
+                await setDoc(userDocRef, {
+                  uid: currentUser.uid,
+                  email: currentUser.email || "",
+                  displayName: currentUser.displayName || "",
+                  photoURL: currentUser.photoURL || "",
+                  coins: localCoins,
+                  danaAccount: dbData.danaAccount || localStorage.getItem("pusat_game_dana_phone") || "",
+                  playedCount: Math.max(dbData.playedCount || 0, parseInt(localStorage.getItem("pusat_game_played_count") || "0", 10)),
+                  favorites: dbData.favorites || JSON.parse(localStorage.getItem("pusat_game_favs") || "[]"),
+                  lastUpdated: new Date().toISOString()
+                }, { merge: true });
+              } catch (writeErr) {
+                console.warn("Failed to write updated coins to Firestore:", writeErr);
+              }
+              showNotification("💎 Koin Tersinkron", "Koin lokal Anda berhasil digabung ke akun cloud!", "💎", "coin");
+            } else {
+              setDanaBalance(dbCoins);
+              if (dbData.danaAccount) {
+                localStorage.setItem("pusat_game_dana_phone", dbData.danaAccount);
+              }
+              if (dbData.favorites) {
+                setFavorites(dbData.favorites);
+              }
+              if (dbData.playedCount) {
+                setGamesPlayedCount(dbData.playedCount);
+              }
+            }
+          } else {
+            // New User flow or fallback due to fetch failure
+            const localCoins = parseInt(localStorage.getItem("pusat_game_dana") || "5500000", 10);
+            setDanaBalance(localCoins);
+            if (!fetchFailed) {
+              try {
+                await setDoc(userDocRef, {
+                  uid: currentUser.uid,
+                  email: currentUser.email || "",
+                  displayName: currentUser.displayName || "",
+                  photoURL: currentUser.photoURL || "",
+                  coins: localCoins,
+                  danaAccount: localStorage.getItem("pusat_game_dana_phone") || "",
+                  playedCount: parseInt(localStorage.getItem("pusat_game_played_count") || "0", 10),
+                  favorites: JSON.parse(localStorage.getItem("pusat_game_favs") || "[]"),
+                  lastUpdated: new Date().toISOString()
+                });
+                showNotification("🛡️ Akun Pengguna Baru", "Game profile berhasil dicadangkan te Database!", "🔥", "coin");
+              } catch (writeErr) {
+                console.warn("Failed to register new profile online:", writeErr);
+              }
+            }
+          }
+        } catch (error) {
+          console.error("Error fetching/syncing user data:", error);
+        } finally {
+          setIsAuthLoading(false);
+        }
+      } else {
+        setIsAuthLoading(false);
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  // Auth action handlers
+  const handleGoogleLogin = async () => {
+    if (isLoggingIn) return;
+    setIsLoggingIn(true);
+    try {
+      const result = await signInWithPopup(auth, googleProvider);
+      if (result.user) {
+        showNotification(
+          "🎮 Login Sukses!",
+          `Selamat Datang, ${result.user.displayName || "Gamer"}! Koin Anda tersinkronisasi.`,
+          "🚀",
+          "coin"
+        );
+      }
+    } catch (err: any) {
+      console.error("Login failed:", err);
+      if (err.code === "auth/popup-blocked" || err.code === "auth/iframe-auth-not-supported" || err.message?.includes("iframe")) {
+        alert(
+          "Akses login dibatasi oleh browser/iframe.\n\n" +
+          "💡 SOLUSI CARA LOGIN:\n" +
+          "Silakan klik tombol 'Buka di Tab Baru' (ikon panah keluar) di bagian kanan atas layar Anda untuk login Google dengan lancar tanpa terhalang iframe!"
+        );
+      } else {
+        alert("Gagal masuk dengan Google: " + (err.message || err.code));
+      }
+    } finally {
+      setIsLoggingIn(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    if (confirm("Apakah Anda yakin ingin logout dari Pusat Game? Seluruh koin Anda akan tetap ada di cloud dan bisa diakses lagi kapan saja saat login.")) {
+      try {
+        await signOut(auth);
+        setUser(null);
+        showNotification(
+          "🔓 Akun Keluar",
+          "Anda sekarang bermain dalam mode Guest (Akun Tamu).",
+          "👋",
+          "coin"
+        );
+        setShowProfileModal(false);
+      } catch (err) {
+        alert("Gagal keluar akun.");
+      }
+    }
+  };
+
+  const [isManualSyncing, setIsManualSyncing] = useState(false);
+  const handleManualSync = async () => {
+    if (!user) return;
+    setIsManualSyncing(true);
+    const path = `users/${user.uid}`;
+    try {
+      const userDocRef = doc(db, "users", user.uid);
+      await setDoc(userDocRef, {
+        uid: user.uid,
+        email: user.email || "",
+        displayName: user.displayName || "",
+        photoURL: user.photoURL || "",
+        coins: danaBalance,
+        danaAccount: localStorage.getItem("pusat_game_dana_phone") || "",
+        playedCount: gamesPlayedCount,
+        favorites: favorites,
+        lastUpdated: new Date().toISOString()
+      }, { merge: true });
+      showNotification(
+        "⚡ Sinkron Berhasil",
+        "Seluruh progres koin & game telah dicadangkan ke server!",
+        "☁️",
+        "coin"
+      );
+    } catch (e: any) {
+      handleFirestoreError(e, OperationType.WRITE, path);
+    } finally {
+      setIsManualSyncing(false);
+    }
+  };
+
+  // Sync favorites & DANA balance back to localStorage & Firebase
   useEffect(() => {
     localStorage.setItem("pusat_game_favs", JSON.stringify(favorites));
+    syncToFirebase({ favorites });
   }, [favorites]);
 
   useEffect(() => {
     localStorage.setItem("pusat_game_dana", danaBalance.toString());
+    syncToFirebase({ coins: danaBalance });
   }, [danaBalance]);
 
   useEffect(() => {
     localStorage.setItem("pusat_game_played_count", gamesPlayedCount.toString());
+    syncToFirebase({ playedCount: gamesPlayedCount });
   }, [gamesPlayedCount]);
 
   useEffect(() => {
@@ -339,6 +659,63 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem("pusat_game_wheel_rewards", JSON.stringify(wheelRewards));
   }, [wheelRewards]);
+
+
+  // Listen to global configurations from Firestore in real-time
+  useEffect(() => {
+    try {
+      const configDocRef = doc(db, "settings", "global");
+      const unsubscribe = onSnapshot(configDocRef, (docSnap) => {
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          if (data.rewardMin !== undefined) {
+            setRewardMin(Number(data.rewardMin));
+          }
+          if (data.rewardMax !== undefined) {
+            setRewardMax(Number(data.rewardMax));
+          }
+          if (data.wheelRewards !== undefined && Array.isArray(data.wheelRewards)) {
+            setWheelRewards(data.wheelRewards);
+            setWheelInput(data.wheelRewards.join(", "));
+          }
+          if (data.unityAdsGameId !== undefined) {
+            setUnityAdsGameId(String(data.unityAdsGameId));
+          }
+          if (data.unityRewardedAdUnit !== undefined) {
+            setUnityRewardedAdUnit(String(data.unityRewardedAdUnit));
+          }
+          if (data.rewardedCoinsPerAd !== undefined) {
+            setRewardedCoinsPerAd(Number(data.rewardedCoinsPerAd));
+          }
+          if (data.apiHost !== undefined) {
+            setApiHost(String(data.apiHost));
+          }
+          if (data.danaKagetLink !== undefined) {
+            const incomingLink = String(data.danaKagetLink || "");
+            if (incomingLink && incomingLink !== prevDanaKagetLink.current) {
+              showNotification(
+                "🎁 DANA Kaget Meluncur!",
+                "Admin baru saja membagikan link DANA Kaget gratis! Klik untuk berburu saldo!",
+                "⚡",
+                "danakaget"
+              );
+            }
+            prevDanaKagetLink.current = incomingLink;
+            setDanaKagetLink(incomingLink);
+          }
+          if (data.danaKagetTime !== undefined) {
+            setDanaKagetTime(String(data.danaKagetTime || ""));
+          }
+        }
+      }, (err) => {
+        console.warn("Failing to listen to live global settings, using local states fallback:", err);
+      });
+      return () => unsubscribe();
+    } catch (e) {
+      console.warn("Firestore error setting up options subscription:", e);
+    }
+  }, []);
+
 
   // Fetch active Dana Kaget link from server
   const fetchDanaKaget = async () => {
@@ -460,34 +837,103 @@ export default function App() {
     return () => clearInterval(interval);
   }, []);
 
+  const saveGlobalSettingsToFirebase = async () => {
+    if (!auth.currentUser) {
+      alert(
+        "❌ Gagal Menyinkronkan: Anda belum login dengan Google.\n\n" +
+        "Silakan masuk terlebih dahulu menggunakan tombol '🔑 LOG IN DENGAN GOOGLE ADMIN' di status otorisasi di bawah!"
+      );
+      return;
+    }
+
+    const email = auth.currentUser.email || "";
+    if (!ALLOWED_ADMINS.includes(email)) {
+      alert(
+        `❌ Akses Ditolak: Akun Anda (${email}) tidak diizinkan.\n\n` +
+        "Akses pengubahan database cloud secara terpusat dibatasi hanya untuk daftar e-mail admin yang didaftarkan saja agar sinkronisasi aman."
+      );
+      return;
+    }
+
+    try {
+      setIsSyncingSettings(true);
+      const settingsRef = doc(db, "settings", "global");
+      await setDoc(settingsRef, {
+        rewardMin: Number(rewardMin),
+        rewardMax: Number(rewardMax),
+        wheelRewards: wheelRewards.map(Number),
+        unityAdsGameId: String(unityAdsGameId),
+        unityRewardedAdUnit: String(unityRewardedAdUnit),
+        rewardedCoinsPerAd: Number(rewardedCoinsPerAd),
+        apiHost: String(apiHost),
+        lastUpdatedBy: auth.currentUser?.email || "admin",
+        lastUpdatedTime: new Date().toISOString()
+      }, { merge: true });
+      showNotification(
+        "⚙️ Pengaturan Diperbarui",
+        "Berhasil menyimpan & mensinkronisasikan seluruh konfigurasi koin dan iklan ke cloud database!",
+        "🚀",
+        "coin"
+      );
+    } catch (err: any) {
+      console.error("Gagal menyinkronkan pengaturan ke Firebase:", err);
+      alert(
+        "Gagal menyinkronkan pengaturan ke cloud data:\n" + err.message + "\n\n" +
+        "💡 Tips: Jika Anda berada di dalam iframe preview, silakan buka aplikasi di 'Tab Baru' (ikon panah kanan atas) untuk memastikan sesi login Google Anda terdeteksi dengan benar!"
+      );
+    } finally {
+      setIsSyncingSettings(false);
+    }
+  };
+
   const handleShareDanaKaget = async () => {
     if (!adminDanaKagetInput.trim()) {
       alert("Masukkan link Dana Kaget yang valid!");
       return;
     }
     try {
+      const dbLink = adminDanaKagetInput.trim();
+      const dbTime = new Date().toISOString();
+
+      // Sync to Firebase settings doc so all clients receive real-time snap event
+      const settingsRef = doc(db, "settings", "global");
+      await setDoc(settingsRef, {
+        danaKagetLink: dbLink,
+        danaKagetTime: dbTime
+      }, { merge: true });
+
+      // Sync to backend Express server memory cache
       const res = await fetch(getApiUrl("/api/admin/dana-kaget"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           passcode: adminPasscode,
-          link: adminDanaKagetInput.trim()
+          link: dbLink
         })
       });
       if (res.ok) {
-        alert("Berhasil membagikan link DANA Kaget ke seluruh user!");
+        alert("Berhasil membagikan link DANA Kaget ke seluruh user via Firebase & Express!");
+        setAdminDanaKagetInput("");
         fetchDanaKaget();
       } else {
         const err = await res.json();
-        alert(err.error || "Gagal membagikan link.");
+        alert(err.error || "Gagal membagikan link ke server.");
       }
-    } catch (e) {
-      alert("Gagal menghubungi server.");
+    } catch (e: any) {
+      alert("Gagal membagikan Dana Kaget: " + e.message);
     }
   };
 
   const handleDeleteDanaKaget = async () => {
     try {
+      // Sync to Firebase settings doc
+      const settingsRef = doc(db, "settings", "global");
+      await setDoc(settingsRef, {
+        danaKagetLink: "",
+        danaKagetTime: ""
+      }, { merge: true });
+
+      // Sync to backend Express server memory
       const res = await fetch(getApiUrl("/api/admin/dana-kaget"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -500,9 +946,12 @@ export default function App() {
         alert("Berhasil menghapus link Dana Kaget!");
         setAdminDanaKagetInput("");
         fetchDanaKaget();
+      } else {
+        const err = await res.json();
+        alert(err.error || "Gagal menghapus link di server.");
       }
-    } catch (e) {
-      alert("Gagal menghubungi server.");
+    } catch (e: any) {
+      alert("Gagal menghapus Dana Kaget: " + e.message);
     }
   };
 
@@ -871,6 +1320,112 @@ export default function App() {
   return (
     <div id="pusat-game-viewport" className="min-h-screen bg-gradient-to-b from-[#0c051a] via-[#120726] to-[#1a0c32] text-white font-sans antialiased relative overflow-x-hidden selection:bg-[#7c3aed] selection:text-white">
       
+      {/* GAMING SPLASHSCREEN OVERLAY */}
+      <AnimatePresence>
+        {showSplash && (
+          <motion.div
+            initial={{ opacity: 1 }}
+            exit={{ opacity: 0, scale: 1.05, filter: "blur(10px)" }}
+            transition={{ duration: 0.6, ease: "easeInOut" }}
+            className="fixed inset-0 z-[9999] bg-gradient-to-b from-[#06020f] via-[#0c041f] to-[#14062e] flex flex-col items-center justify-center p-6 select-none"
+          >
+            {/* Cyberpunk Grid Background Decal */}
+            <div 
+              className="absolute inset-0 opacity-[0.06] pointer-events-none"
+              style={{
+                backgroundImage: `linear-gradient(rgba(0, 242, 254, 0.15) 1px, transparent 1px), linear-gradient(90deg, rgba(0, 242, 254, 0.15) 1px, transparent 1px)`,
+                backgroundSize: '24px 24px',
+              }}
+            />
+            
+            {/* Ambient neon radial glow accents */}
+            <div className="absolute w-[320px] h-[320px] rounded-full bg-[#7209b7] opacity-35 blur-[80px]" />
+            <div className="absolute w-[220px] h-[220px] rounded-full bg-[#ff007f] opacity-25 blur-[60px] translate-y-16" />
+
+            {/* Glowing Logo Circle with dual rotating cyber portals */}
+            <motion.div
+              initial={{ scale: 0.8, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ delay: 0.1, type: "spring", stiffness: 120 }}
+              className="relative w-44 h-44 mb-8 flex items-center justify-center"
+            >
+              <div className="absolute inset-0 rounded-full bg-gradient-to-tr from-[#9d4edd] to-[#00f2fe] opacity-25 blur-2xl animate-pulse" />
+              
+              {/* Outer rotating portals */}
+              <motion.div
+                animate={{ rotate: 360 }}
+                transition={{ repeat: Infinity, duration: 15, ease: "linear" }}
+                className="absolute inset-0 rounded-full border-2 border-dashed border-[#00f2fe]/40"
+              />
+              <motion.div
+                animate={{ rotate: -360 }}
+                transition={{ repeat: Infinity, duration: 25, ease: "linear" }}
+                className="absolute -inset-2 rounded-full border border-dashed border-[#ff007f]/30"
+              />
+              
+              {/* Central Premium Vector Icon Wrapper */}
+              <div className="relative w-36 h-36 bg-[#0c041f] rounded-full border-2 border-[#00f2fe]/80 p-2 shadow-[0_0_35px_rgba(0,242,254,0.35)] overflow-hidden flex items-center justify-center">
+                <img src="/icon.svg" alt="Pusat Game" className="w-full h-full object-contain" referrerPolicy="no-referrer" />
+              </div>
+            </motion.div>
+
+            {/* Title / Slogan branding text */}
+            <motion.div
+              initial={{ y: 20, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              transition={{ delay: 0.25 }}
+              className="text-center relative z-10 mb-8"
+            >
+              <h1 className="text-4xl md:text-5xl font-black italic tracking-widest bg-clip-text text-transparent bg-gradient-to-r from-white via-[#00f2fe] to-[#ff007f] filter drop-shadow-[0_4px_12px_rgba(0,0,0,0.6)]">
+                PUSAT GAME
+              </h1>
+              <div className="flex items-center justify-center gap-2 mt-2">
+                <span className="h-0.5 w-6 rounded-full bg-[#ff007f] opacity-80" />
+                <span className="text-[9px] font-mono uppercase tracking-[0.25em] text-purple-300 font-extrabold">Ultimate Gaming Portal</span>
+                <span className="h-0.5 w-6 rounded-full bg-[#00f2fe] opacity-80" />
+              </div>
+            </motion.div>
+
+            {/* Modern Gaming Style Progress & Status bar */}
+            <div className="w-full max-w-xs relative z-10">
+              <div className="flex justify-between items-center mb-2 px-1">
+                <span className="text-[9px] font-mono font-bold text-cyan-400 uppercase tracking-widest flex items-center gap-1.5 animate-pulse">
+                  <span className="h-1.5 w-1.5 rounded-full bg-cyan-400" />
+                  {splashStatus}
+                </span>
+                <span className="text-[10px] font-mono font-black text-purple-300">
+                  {splashProgress}%
+                </span>
+              </div>
+              
+              {/* Progress track */}
+              <div className="w-full h-3 bg-[#0a0416] border border-purple-500/20 rounded-full overflow-hidden p-[2px] shadow-inner">
+                {/* Active progress bar */}
+                <motion.div
+                  className="h-full rounded-full bg-gradient-to-r from-[#7209b7] via-[#ff007f] to-[#00f2fe] relative"
+                  style={{ width: `${splashProgress}%` }}
+                >
+                  {/* Lead glow spark */}
+                  <div className="absolute top-0 right-0 bottom-0 w-2.5 bg-white rounded-full filter blur-[2px] opacity-90 animate-pulse" />
+                </motion.div>
+              </div>
+
+              {/* Sub-info system logs (Anti-AI-Slop, keeping it completely clean and literal) */}
+              <div className="flex items-center justify-between mt-3 px-1 text-[8px] font-mono text-purple-500/70 font-bold uppercase tracking-wider">
+                <span>SYSTEM: READY</span>
+                <span>SECURE CLIENT</span>
+                <span>V2.4.0</span>
+              </div>
+            </div>
+            
+            {/* Elegant footer notice */}
+            <div className="absolute bottom-6 text-[8px] font-mono text-purple-400/40 tracking-wider uppercase font-bold text-center">
+              © {new Date().getFullYear()} PUSAT GAME • Semuanya Bisa Main
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* PHONE NOTIFICATION BAR */}
       <div className="fixed top-2 left-0 right-0 z-[100] px-4 pointer-events-none flex flex-col gap-2 items-center">
         <AnimatePresence>
@@ -979,12 +1534,78 @@ export default function App() {
                 </span>
               </div>
             </div>
+
+            {/* Google Authentication - Profile / Login Button */}
+            {isAuthLoading ? (
+              <div className="w-8 h-8 rounded-full bg-[#1c093a] border border-purple-500/20 flex items-center justify-center shrink-0">
+                <Loader2 className="w-3.5 h-3.5 animate-spin text-purple-400" />
+              </div>
+            ) : user ? (
+              <button 
+                onClick={() => setShowProfileModal(true)}
+                title={`Profil ${user.displayName}`}
+                className="w-8 h-8 rounded-full border-2 border-[#10b981] p-[1px] hover:border-[#00f2fe] hover:shadow-[0_0_12px_rgba(0,242,254,0.3)] transition-all duration-300 cursor-pointer active:scale-95 shrink-0 relative flex items-center justify-center bg-[#15062a]"
+              >
+                <img 
+                  src={user.photoURL || `https://api.dicebear.com/7.x/adventurer/svg?seed=${user.uid}`} 
+                  alt="Gamer Avatar" 
+                  className="w-full h-full rounded-full object-cover" 
+                  referrerPolicy="no-referrer"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src = `https://api.dicebear.com/7.x/adventurer/svg?seed=${user.displayName || "Gamer"}`;
+                  }}
+                />
+                <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-[#10b981] border border-[#0d051c] rounded-full animate-pulse" />
+              </button>
+            ) : (
+              <button
+                onClick={handleGoogleLogin}
+                disabled={isLoggingIn}
+                className="bg-gradient-to-r from-[#ff007f] to-[#7209b7] hover:brightness-110 border border-[#ff007f]/40 px-2.5 py-1.5 rounded-full flex items-center gap-1 cursor-pointer transition-all duration-200 active:scale-95 text-[9px] font-black uppercase tracking-wider shadow-md hover:shadow-[#ff007f]/20 shrink-0 text-white"
+              >
+                {isLoggingIn ? (
+                  <Loader2 className="w-3 h-3 animate-spin text-white" />
+                ) : (
+                  <>
+                    <LogIn className="w-3 h-3 text-white" />
+                    <span>LOGIN</span>
+                  </>
+                )}
+              </button>
+            )}
           </div>
         </div>
       </header>
 
-      {/* VIEWPORT CONSTRAINED WRAPPER (Designed for Desktop & Mobile layout optimization) */}
+       {/* VIEWPORT CONSTRAINED WRAPPER (Designed for Desktop & Mobile layout optimization) */}
       <main className="max-w-md mx-auto px-4 pb-20 pt-4">
+
+        {/* LOGIN REMINDER FOR GUEST ACCOUNTS */}
+        {!user && !isAuthLoading && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-5 bg-gradient-to-r from-[#2a0845] to-[#6441a5]/55 border border-[#ff007f]/40 rounded-2xl p-3.5 flex items-center justify-between gap-3 shadow-[0_4px_20px_rgba(255,0,127,0.15)] relative overflow-hidden text-white"
+          >
+            {/* Ambient flashing left edge indicator */}
+            <div className="absolute top-0 bottom-0 left-0 w-1 bg-[#ff007f] @keyframes scale-100 animate-pulse" />
+            <div className="flex-1">
+              <h4 className="text-xs font-black text-white flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#ff007f] animate-ping" />
+                <span>⚠️ MODE TAMU (GUEST ACTIVE)</span>
+              </h4>
+              <p className="text-[10px] text-purple-200 mt-1 leading-snug">
+                Data koin Anda saat ini disimpan secara sementara. <strong className="text-[#00f2fe]">Login One-Click Google</strong> sekarang agar koin Anda aman selamanya!
+              </p>
+            </div>
+            <button
+              onClick={handleGoogleLogin}
+              className="py-1.5 px-3 text-[10px] font-black uppercase tracking-wider bg-[#ff007f] hover:bg-[#ff007f]/90 text-white rounded-lg shadow-md transition-all active:scale-95 shrink-0 cursor-pointer"
+            >
+              AMANKAN
+            </button>
+          </motion.div>
+        )}
 
         {/* PROMO BANNER / REWARD ACTION BAR */}
         <div className="relative mb-5 bg-gradient-to-r from-[#211244] to-[#12082b] border-2 border-[#521ca6]/80 rounded-2xl overflow-hidden p-4 shadow-xl">
@@ -1519,6 +2140,135 @@ export default function App() {
               </div>
             </div>
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* GAMERS PROFILE MODE OVERLAY */}
+      <AnimatePresence>
+        {showProfileModal && user && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 0.7 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowProfileModal(false)}
+              className="fixed inset-0 bg-black/80 z-[100] backdrop-blur-sm"
+            />
+            
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 15 }}
+              transition={{ type: "spring", duration: 0.5 }}
+              className="fixed inset-x-4 top-[15%] max-w-sm mx-auto bg-gradient-to-b from-[#140a2c] via-[#0d0421] to-[#080215] border-2 border-[#00f2fe]/40 rounded-3xl p-5 shadow-[0_0_50px_rgba(0,242,254,0.15)] z-[101] text-white overflow-hidden"
+            >
+              {/* Decorative side accents */}
+              <div className="absolute top-0 right-0 w-24 h-24 bg-purple-500/10 blur-xl rounded-full" />
+              <div className="absolute -bottom-8 -left-8 w-24 h-24 bg-cyan-500/10 blur-xl rounded-full" />
+              
+              {/* Header Title bar */}
+              <div className="flex items-center justify-between border-b border-purple-900/40 pb-3.5 mb-4 relative z-20">
+                <div className="flex items-center gap-2">
+                  <Shield className="w-4 h-4 text-cyan-400 animate-pulse" />
+                  <span className="text-[10px] font-mono font-black tracking-widest text-cyan-400 uppercase">GAMER CENTER</span>
+                </div>
+                <button 
+                  onClick={() => setShowProfileModal(false)}
+                  className="w-6 h-6 rounded-full bg-purple-950/40 border border-purple-800/35 hover:bg-purple-900/60 flex items-center justify-center transition-colors text-purple-300 cursor-pointer"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+
+              {/* Profile Main Information card */}
+              <div className="flex flex-col items-center text-center py-2 relative z-10">
+                <div className="relative w-20 h-20 mb-3.5">
+                  {/* Glowing orbital border */}
+                  <div className="absolute inset-0 rounded-full bg-gradient-to-tr from-[#7209b7] via-[#ff007f] to-[#00f2fe] animate-spin p-[2px]" style={{ animationDuration: '6s' }} />
+                  <img 
+                    src={user.photoURL || `https://api.dicebear.com/7.x/adventurer/svg?seed=${user.uid}`} 
+                    alt="Gamer Large Avatar" 
+                    className="w-full h-full rounded-full object-cover bg-slate-900 relative z-10 p-[1px]" 
+                    referrerPolicy="no-referrer"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).src = `https://api.dicebear.com/7.x/adventurer/svg?seed=${user.displayName || "Gamer"}`;
+                    }}
+                  />
+                  <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-emerald-500 border-2 border-[#140a2c] flex items-center justify-center relative z-20">
+                    <CheckCircle2 className="w-4 h-4 text-white font-bold" />
+                  </div>
+                </div>
+
+                <h2 className="text-lg font-black tracking-wide text-white leading-tight">
+                  {user.displayName || "Gamer Sejati"}
+                </h2>
+                <span className="text-[10px] font-mono text-purple-400/95 tracking-wider">
+                  {user.email || "gamer@pusatgame.id"}
+                </span>
+                
+                <div className="inline-block px-3 py-1 bg-emerald-500/10 border border-emerald-500/20 rounded-full mt-2.5">
+                  <span className="text-[9px] font-mono font-bold text-emerald-400 tracking-wider flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#10b981] animate-pulse" />
+                    Koin Terkunci Aman di Cloud
+                  </span>
+                </div>
+              </div>
+
+              {/* Player Stats grid */}
+              <div className="grid grid-cols-2 gap-3 my-4 relative z-10">
+                <div className="bg-[#120525] border border-purple-900/30 rounded-xl p-3 flex flex-col justify-center">
+                  <span className="text-[8px] font-mono text-purple-400 uppercase font-black">Sisa Saldo Koin</span>
+                  <div className="text-xs font-black text-yellow-400 font-mono tracking-wide mt-1 flex items-center gap-1">
+                    <span>🪙</span>
+                    <span>{danaBalance.toLocaleString("id-ID")}</span>
+                  </div>
+                  <span className="text-[7px] text-purple-400/60 font-mono mt-0.5 font-semibold">Tersinkronisasi</span>
+                </div>
+
+                <div className="bg-[#120525] border border-purple-900/30 rounded-xl p-3 flex flex-col justify-center">
+                  <span className="text-[8px] font-mono text-purple-400 uppercase font-black">Misi Selesai</span>
+                  <div className="text-xs font-black text-cyan-400 font-mono tracking-wide mt-1 flex items-center gap-1">
+                    <span>🎮</span>
+                    <span>{gamesPlayedCount} Game</span>
+                  </div>
+                  <span className="text-[7px] text-purple-400/60 font-mono mt-0.5 font-semibold">Aktif Bermain</span>
+                </div>
+              </div>
+
+              {/* Google Secure Cloud Backup Action info */}
+              <div className="bg-[#0b031b] border border-purple-500/15 rounded-xl px-3 py-2.5 mb-4 text-[10px] text-purple-300 leading-normal flex items-start gap-2 relative z-10">
+                <span className="text-base leading-none">🛡️</span>
+                <div>
+                  Koin Anda otomatis dicadangkan setiap kali bertambah. Pencairan Reward ke E-Wallet DANA jadi makin aman dan mulus.
+                </div>
+              </div>
+
+              {/* Action buttons (Sync & Logout) */}
+              <div className="flex flex-col gap-2 relative z-10">
+                <button
+                  onClick={handleManualSync}
+                  disabled={isManualSyncing}
+                  className="w-full py-2.5 rounded-xl bg-gradient-to-r from-[#00f2fe] to-indigo-600 hover:brightness-110 active:scale-[0.98] transition-all text-xs font-black tracking-wider uppercase flex items-center justify-center gap-2 text-white shadow-lg shadow-cyan-900/20 cursor-pointer"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isManualSyncing ? "animate-spin" : ""}`} />
+                  <span>{isManualSyncing ? "Menyinkronkan..." : "SINKRONKAN DATA SEKARANG"}</span>
+                </button>
+
+                <button
+                  onClick={handleLogout}
+                  className="w-full py-2.5 rounded-xl bg-purple-950/20 hover:bg-rose-950/40 border border-purple-800/30 hover:border-rose-500/40 active:scale-[0.98] transition-all text-xs font-bold tracking-wider uppercase flex items-center justify-center gap-2 text-rose-300 transition-colors cursor-pointer"
+                >
+                  <LogOut className="w-3.5 h-3.5 text-rose-400" />
+                  <span>LOGOUT AKUN GAMER</span>
+                </button>
+              </div>
+
+              {/* User ID Indicator decal */}
+              <div className="text-center mt-4 text-[7px] font-mono text-purple-500/50 uppercase tracking-widest font-bold">
+                GUID: {user.uid}
+              </div>
+            </motion.div>
+          </>
         )}
       </AnimatePresence>
 
@@ -2391,6 +3141,67 @@ export default function App() {
                           Masukkan GamePix Property SID (Publisher SID / Channel ID) terbaru Anda. Koin game dan iklan monetisasi game di web akan otomatis dikreditkan ke ID properti baru Anda!
                         </p>
                       </div>
+                    </div>
+                    {/* BUTTON TO SAVE & SYNC ALL SETTINGS TO FIRESTORE */}
+                    <div className="mt-4 pt-4 border-t border-purple-900/40 bg-purple-950/20 p-3 rounded-2xl border border-purple-500/10">
+                      <div className="mb-3 text-center">
+                        <span className="text-[10px] font-bold text-yellow-300 uppercase tracking-widest block mb-1">
+                          STATUS OTORISASI SINKRONISASI
+                        </span>
+                        
+                        {!user ? (
+                          <div className="flex flex-col items-center gap-1.5 p-2 bg-red-950/20 border border-red-500/20 rounded-xl">
+                            <span className="text-[9px] text-red-300 font-medium">
+                              ⚠️ Belum terhubung dengan Google.
+                            </span>
+                            <button
+                              onClick={handleGoogleLogin}
+                              className="px-3 py-1 text-[9px] font-extrabold bg-[#4285F4] hover:bg-[#357ae8] text-white rounded-lg shadow transition-all active:scale-95 flex items-center gap-1 cursor-pointer mx-auto"
+                            >
+                              🔑 HUBUNGKAN GOOGLE ADMIN
+                            </button>
+                          </div>
+                        ) : (user.email && ALLOWED_ADMINS.includes(user.email)) ? (
+                          <div className="p-2 bg-emerald-950/30 border border-emerald-500/30 rounded-xl flex items-center justify-center gap-1.5">
+                            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                            <span className="text-[10px] text-emerald-300 font-bold">
+                              Google Admin Aktif: {user.email} (Aman) ✅
+                            </span>
+                          </div>
+                        ) : (
+                          <div className="flex flex-col items-center gap-1.5 p-2 bg-amber-950/20 border border-amber-500/20 rounded-xl">
+                            <span className="text-[9px] text-amber-300 font-medium leading-normal text-center">
+                              ⚠️ Anda terhubung sebagai <strong>{user.email}</strong>. Bukan email admin yang terdaftar.
+                            </span>
+                            <button
+                              onClick={handleGoogleLogin}
+                              className="px-3 py-1 text-[9px] font-extrabold bg-amber-600 hover:bg-amber-700 text-white rounded-lg shadow transition-all active:scale-95 cursor-pointer"
+                            >
+                              🔁 GANTI KE AKUN GOOGLE ADMIN
+                            </button>
+                          </div>
+                        )}
+                      </div>
+
+                      <button
+                        onClick={saveGlobalSettingsToFirebase}
+                        disabled={isSyncingSettings}
+                        className="w-full py-3 bg-gradient-to-r from-yellow-500 via-amber-500 to-orange-500 hover:brightness-110 disabled:brightness-50 text-purple-950 font-black text-xs tracking-wider rounded-xl shadow-lg transform active:scale-[0.99] transition-all flex items-center justify-center gap-2 cursor-pointer border border-yellow-300/40"
+                      >
+                        {isSyncingSettings ? (
+                          <>
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            <span>SINKRONISASI KE CLOUD...</span>
+                          </>
+                        ) : (
+                          <>
+                            <span>💾 UPDATE & SINKRONKAN SETTING KE FIREBASE</span>
+                          </>
+                        )}
+                      </button>
+                      <p className="text-[8.5px] text-center text-yellow-400/80 mt-2 leading-relaxed">
+                        ★ Klik tombol di atas agar rentang Koin, hadiah Lucky Wheel, Unit Iklan, dan konfigurasi lainnya tersimpan di Firebase Firestore untuk berlaku ke seluruh user secara real-time.
+                      </p>
                     </div>
                   </div>
 

@@ -357,24 +357,37 @@ async function startServer() {
     }
   });
 
-  // Serve ads.txt dynamically at root /ads.txt
-  app.get("/ads.txt", (req, res) => {
+  // Serve ads.txt and app-ads.txt dynamically at root
+  app.get(["/ads.txt", "/app-ads.txt"], (req, res) => {
     try {
-      const adsPath = path.join(process.cwd(), "public", "ads.txt");
+      const isAppAds = req.path === "/app-ads.txt";
+      const fileName = isAppAds ? "app-ads.txt" : "ads.txt";
+      
+      let adsPath = path.join(process.cwd(), "public", fileName);
+      if (isAppAds && !fs.existsSync(adsPath)) {
+        // Fallback to ads.txt if app-ads.txt does not exist
+        adsPath = path.join(process.cwd(), "public", "ads.txt");
+      }
+
       if (fs.existsSync(adsPath)) {
         res.setHeader("Content-Type", "text/plain");
         return res.send(fs.readFileSync(adsPath, "utf8"));
       }
-      const distAdsPath = path.join(process.cwd(), "dist", "ads.txt");
+      
+      let distAdsPath = path.join(process.cwd(), "dist", fileName);
+      if (isAppAds && !fs.existsSync(distAdsPath)) {
+        distAdsPath = path.join(process.cwd(), "dist", "ads.txt");
+      }
+
       if (fs.existsSync(distAdsPath)) {
         res.setHeader("Content-Type", "text/plain");
         return res.send(fs.readFileSync(distAdsPath, "utf8"));
       }
       res.setHeader("Content-Type", "text/plain");
-      return res.send("# Ads.txt - Silakan masukkan konfigurasi ads.txt di Panel Admin");
+      return res.send(`# ${fileName} - Silakan masukkan konfigurasi di Panel Admin`);
     } catch (err: any) {
       res.setHeader("Content-Type", "text/plain");
-      return res.status(500).send("# Gagal membaca file ads.txt: " + err.message);
+      return res.status(500).send("# Gagal membaca file: " + err.message);
     }
   });
 
